@@ -18,6 +18,8 @@ let myRecords = [];     // 내 daily_records (현재 회차)
 let myPosts = [];       // 내 posts (현재 회차)
 let allUsers = [];      // 관리자용
 let allQuotes = [];     // 관리자용
+let commentsMap = {};   // postId -> [comments]
+let activeCommentPostId = null;
 let timerInterval = null;
 let pendingImages = []; // base64 array (업로드 대기 이미지)
 let isPrivatePost = false;
@@ -134,7 +136,7 @@ $('#loginBtn').onclick = async ()=>{
     await afterLogin();
   }catch(e){
     console.error(e);
-    showAuthError('login','로그인 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
+    showAuthError('login','로그인 중 오류: ' + (e.message || '잠시 후 다시 시도해주세요.'));
   }finally{
     $('#loginBtn').disabled = false;
   }
@@ -206,6 +208,7 @@ $('#logoutBtn').onclick = ()=>{
   store.remove('mpc_user_id');
   currentUser = null;
   if(timerInterval) clearInterval(timerInterval);
+  $('#mainNav').style.display='none';
   $('#app').style.display='none';
   showScreen('authScreen');
   $('#loginCard').style.display='block';
@@ -223,6 +226,7 @@ async function getActiveSession(){
 async function afterLogin(){
   showScreen('home');
   setActiveNav('home');
+  $('#mainNav').style.display='flex';
 
   if(currentUser.is_admin){
     $('#adminNavBtn').style.display='flex';
@@ -311,14 +315,24 @@ async function setupWakeUI(){
     $('#timerWrap').classList.remove('show');
     $('#wakeBtn').disabled = false;
     $('#wakeBtn').textContent = '☀️ 방금 일어났어요';
+    $('#wakeInfo').style.display='none';
     return;
   }
+
+  const wokeTimeStr = record.woke_at ? new Date(record.woke_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Seoul'}) : '-';
 
   if(record.status === 'success'){
     $('#wakeCard').style.display='block';
     $('#wakeBtn').disabled = true;
     $('#wakeBtn').textContent = '오늘 인증 완료 🌟';
     $('#timerWrap').classList.remove('show');
+
+    const verifiedTimeStr = record.verified_at ? new Date(record.verified_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Seoul'}) : '-';
+    $('#wakeInfo').style.display='flex';
+    $('#wakeInfo').innerHTML = `
+      <div class="wi-item"><span class="wi-label">⏰ 오늘 기상</span><span class="wi-value">${wokeTimeStr}</span></div>
+      <div class="wi-item"><span class="wi-label">✅ 인증 완료</span><span class="wi-value">${verifiedTimeStr}</span></div>
+    `;
     return;
   }
 
@@ -327,12 +341,22 @@ async function setupWakeUI(){
     $('#wakeBtn').disabled = true;
     $('#wakeBtn').textContent = '오늘은 인증 실패예요 🌧️';
     $('#timerWrap').classList.remove('show');
+    $('#wakeInfo').style.display='flex';
+    $('#wakeInfo').innerHTML = `
+      <div class="wi-item"><span class="wi-label">⏰ 오늘 기상</span><span class="wi-value">${wokeTimeStr}</span></div>
+      <div class="wi-item"><span class="wi-label">상태</span><span class="wi-value">미인증</span></div>
+    `;
     return;
   }
 
   // pending - 골든타임 진행 중 or 만료
   $('#wakeCard').style.display='none';
   $('#timerWrap').classList.add('show');
+  $('#wakeInfo').style.display='flex';
+  $('#wakeInfo').innerHTML = `
+    <div class="wi-item"><span class="wi-label">⏰ 오늘 기상</span><span class="wi-value">${wokeTimeStr}</span></div>
+    <div class="wi-item"><span class="wi-label">상태</span><span class="wi-value">작성 중</span></div>
+  `;
   startGoldenTimer(record);
 }
 
@@ -518,7 +542,7 @@ $('#submitBtn').onclick = async ()=>{
     showCelebration(newStreak);
   }catch(e){
     console.error(e);
-    toast('인증 중 오류가 발생했어요. 다시 시도해주세요.');
+    toast('인증 중 오류: ' + (e.message || e.error_description || '알 수 없는 오류'));
   }finally{
     $('#submitBtn').disabled = false;
     $('#submitBtn').textContent = '인증 완료하기';
@@ -604,12 +628,26 @@ async function renderFeed(){
     (likes||[]).forEach(l=>myLikes.add(l.post_id));
   }
 
+  // 댓글 가져오기
+  commentsMap = {};
+  if(postIds.length){
+    const { data: comments } = await sb.from('comments')
+      .select('*, users!comments_user_id_fkey(nickname)')
+      .in('post_id', postIds)
+      .order('created_at',{ascending:true});
+    (comments||[]).forEach(c=>{
+      if(!commentsMap[c.post_id]) commentsMap[c.post_id] = [];
+      commentsMap[c.post_id].push(c);
+    });
+  }
+
   $('#postList').innerHTML = visible.map(p=>{
     const name = p.users?.nickname || '익명';
     const color = COLORS[hashCode(name)%COLORS.length];
     const wokeTime = p.woke_at ? new Date(p.woke_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Seoul'}) : '-';
     const timeAgo = timeAgoStr(p.created_at);
     const liked = myLikes.has(p.id);
+    const commentCount = (commentsMap[p.id]||[]).length;
 
     let imgsHtml;
     if(p.images && p.images.length){
@@ -633,6 +671,7 @@ async function renderFeed(){
         <div class="post-note">${escapeHtml(p.note||'')}</div>
         <div class="post-actions">
           <button class="act ${liked?'on':''}" data-like="${p.id}"><span class="ic">${liked?'❤️':'🤍'}</span> <span class="lc">${p.likes_count||0}</span></button>
+          <button class="act" data-comment="${p.id}"><span class="ic">💬</span> 댓글 ${commentCount>0?commentCount:''}</button>
           <button class="act" data-cheer="${escapeHtml(name)}"><span class="ic">🔥</span> 응원</button>
         </div>
       </div>
@@ -641,6 +680,7 @@ async function renderFeed(){
 
   $$('#postList [data-like]').forEach(b=>b.onclick=()=>toggleLike(b));
   $$('#postList [data-cheer]').forEach(b=>b.onclick=()=>toast(`${b.dataset.cheer}님에게 응원을 보냈어요 🔥`));
+  $$('#postList [data-comment]').forEach(b=>b.onclick=()=>openComments(b.dataset.comment));
 }
 
 function hashCode(str){
@@ -679,6 +719,68 @@ async function toggleLike(btn){
     }
   }catch(e){ console.error(e); }
 }
+
+/* ================== 댓글 ================== */
+function openComments(postId){
+  activeCommentPostId = postId;
+  renderCommentList();
+  $('#commentInput').value='';
+  $('#commentOverlay').classList.add('show');
+}
+$('#commentCloseBtn').onclick = ()=>{ $('#commentOverlay').classList.remove('show'); activeCommentPostId=null; };
+$('#commentOverlay').addEventListener('click', e=>{ if(e.target.id==='commentOverlay'){ $('#commentOverlay').classList.remove('show'); activeCommentPostId=null; } });
+
+function renderCommentList(){
+  const list = commentsMap[activeCommentPostId] || [];
+  if(!list.length){
+    $('#commentList').innerHTML = `<div class="comment-empty">아직 댓글이 없어요. 첫 댓글을 남겨보세요 💬</div>`;
+    return;
+  }
+  $('#commentList').innerHTML = list.map(c=>{
+    const name = c.users?.nickname || '익명';
+    const color = COLORS[hashCode(name)%COLORS.length];
+    const canDelete = c.user_id===currentUser.id || currentUser.is_admin;
+    return `<div class="comment-row">
+      <div class="comment-avatar" style="background:${color}">${name[0]}</div>
+      <div class="comment-body">
+        <div class="comment-name">${escapeHtml(name)}</div>
+        <div class="comment-text">${escapeHtml(c.content)}</div>
+        <div class="comment-meta">
+          <span>${timeAgoStr(c.created_at)}</span>
+          ${canDelete?`<button class="del" data-del-comment="${c.id}">삭제</button>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  $$('#commentList [data-del-comment]').forEach(b=>b.onclick=async()=>{
+    if(!confirm('댓글을 삭제할까요?')) return;
+    try{
+      await sb.from('comments').delete().eq('id', b.dataset.delComment);
+      commentsMap[activeCommentPostId] = (commentsMap[activeCommentPostId]||[]).filter(c=>c.id!==b.dataset.delComment);
+      renderCommentList();
+      await renderFeed();
+    }catch(e){ console.error(e); toast('삭제 중 오류가 발생했어요.'); }
+  });
+}
+
+$('#commentSubmitBtn').onclick = async ()=>{
+  const content = $('#commentInput').value.trim();
+  if(!content || !activeCommentPostId) return;
+  $('#commentSubmitBtn').disabled = true;
+  try{
+    const { data, error } = await sb.from('comments').insert({
+      post_id: activeCommentPostId, user_id: currentUser.id, content
+    }).select('*, users!comments_user_id_fkey(nickname)').single();
+    if(error) throw error;
+    if(!commentsMap[activeCommentPostId]) commentsMap[activeCommentPostId]=[];
+    commentsMap[activeCommentPostId].push(data);
+    $('#commentInput').value='';
+    renderCommentList();
+    await renderFeed();
+  }catch(e){ console.error(e); toast('댓글 등록 중 오류가 발생했어요.'); }
+  finally{ $('#commentSubmitBtn').disabled = false; }
+};
 
 /* ================== 정원 ================== */
 // 식물 SVG: 0(씨앗)~20(꽃) 21단계, wilting(0~3)에 따라 색이 칙칙해짐
@@ -990,23 +1092,26 @@ async function renderAdminQuotes(){
   }
 
   $('#quoteList').innerHTML = allQuotes.map((q,i)=>`
-    <div class="list-item">
+    <div class="list-item" id="quote-item-${q.id}">
       <div class="row1">
         <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
           <button data-up="${q.id}" ${i===0?'disabled':''} style="border:none;background:var(--paper-2);border-radius:8px;width:26px;height:22px;cursor:pointer;font-size:11px;${i===0?'opacity:.3':''}">▲</button>
           <button data-down="${q.id}" ${i===allQuotes.length-1?'disabled':''} style="border:none;background:var(--paper-2);border-radius:8px;width:26px;height:22px;cursor:pointer;font-size:11px;${i===allQuotes.length-1?'opacity:.3':''}">▼</button>
         </div>
-        <div style="flex:1">
+        <div style="flex:1" id="quote-display-${q.id}">
           <div class="title">${i+1<=21?`<span style="color:var(--sage-deep);font-weight:700">${i+1}일차 ·</span> `:'<span style="color:var(--ink-soft)">예비 ·</span> '}${escapeHtml(q.quote_text)}</div>
           <div class="desc">${q.author?escapeHtml(q.author):'작자 미상'}</div>
         </div>
         <div class="li-actions">
+          <button data-edit-q="${q.id}">수정</button>
           <button data-toggle-q="${q.id}">${q.is_active?'사용중':'비활성'}</button>
           <button class="danger" data-del-q="${q.id}">삭제</button>
         </div>
       </div>
     </div>
   `).join('');
+
+  $$('#quoteList [data-edit-q]').forEach(b=>b.onclick=()=>startEditQuote(b.dataset.editQ));
 
   $$('#quoteList [data-toggle-q]').forEach(b=>b.onclick=async()=>{
     const q = allQuotes.find(x=>x.id===b.dataset.toggleQ);
@@ -1035,6 +1140,34 @@ async function moveQuote(id, dir){
     await sb.from('quotes').update({order_num:aOrder}).eq('id', b.id);
     await renderAdminQuotes();
   }catch(e){ console.error(e); toast('순서 변경 중 오류가 발생했어요.'); }
+}
+
+function startEditQuote(id){
+  const q = allQuotes.find(x=>x.id===id);
+  if(!q) return;
+  const el = $('#quote-display-'+id);
+  el.innerHTML = `
+    <div class="field" style="margin-bottom:8px"><textarea id="edit-text-${id}" rows="2">${escapeHtml(q.quote_text)}</textarea></div>
+    <div class="field" style="margin-bottom:8px"><input type="text" id="edit-author-${id}" value="${escapeHtml(q.author||'')}" placeholder="말한 사람 (선택)"></div>
+    <div style="display:flex;gap:8px">
+      <button class="primary" style="margin-top:0;padding:8px;font-size:13px" data-save-q="${id}">저장</button>
+      <button class="ghost" style="margin-top:0;padding:8px;font-size:13px" data-cancel-q="${id}">취소</button>
+    </div>
+  `;
+  $('#edit-text-'+id).focus();
+  $('[data-save-q="'+id+'"]').onclick = ()=>saveEditQuote(id);
+  $('[data-cancel-q="'+id+'"]').onclick = ()=>renderAdminQuotes();
+}
+
+async function saveEditQuote(id){
+  const text = $('#edit-text-'+id).value.trim();
+  const author = $('#edit-author-'+id).value.trim();
+  if(!text){ toast('명언 내용을 입력해주세요.'); return; }
+  try{
+    await sb.from('quotes').update({quote_text:text, author}).eq('id', id);
+    toast('명언이 수정됐어요.');
+    await renderAdminQuotes();
+  }catch(e){ console.error(e); toast('수정 중 오류가 발생했어요.'); }
 }
 
 $('#addQuoteBtn').onclick = async ()=>{
@@ -1084,37 +1217,40 @@ async function renderAdminPosts(){
 }
 
 /* ================== 인증 실패 처리 (자정 체크 / 골든타임 만료) ================== */
-// 페이지 로드시 + 1분마다 체크: 자정 지났는데 기상 안 했으면 failed, 골든타임 지났는데 미인증이면 failed (시들기 증가)
+// 페이지 로드시: 시작일부터 오늘 이전(day-1)까지 모든 날짜를 점검해서
+// 기록이 없거나 pending 상태인 날은 failed로 처리하고, 연속 실패 일수에 따라 시들기 정도를 올린다.
+// 성공한 날을 만나면 연속 실패 카운트를 초기화한다.
 async function checkFailures(){
   if(!currentUser || currentUser.is_admin || !currentSession) return;
   const day = getCurrentDay();
-  const now = nowKST();
+  const recordedDays = new Map(myRecords.map(r=>[r.day, r]));
+  let consecutiveMiss = 0;
 
-  // 오늘 record가 없고, 자정(00:00)을 지났다면 -> 어제자 기록을 failed 처리
-  // 어제 day에 대한 record 확인
-  const prevDay = day - 1;
-  if(prevDay >= 1){
-    const prevRecord = myRecords.find(r=>r.day===prevDay);
-    if(!prevRecord){
-      // 어제 기상 자체를 안 함 -> failed record 생성 (시들기 처리용)
+  for(let d=1; d<day; d++){
+    const rec = recordedDays.get(d);
+    if(!rec){
+      consecutiveMiss++;
       try{
         const { data, error } = await sb.from('daily_records').insert({
-          user_id: currentUser.id, session_id: currentSession.id, day: prevDay,
-          status:'failed', wilting_level: 1
+          user_id: currentUser.id, session_id: currentSession.id, day: d,
+          status:'failed', wilting_level: Math.min(3, consecutiveMiss)
         }).select().single();
-        if(!error){ myRecords.push(data); }
+        if(!error){ myRecords.push(data); recordedDays.set(d, data); }
       }catch(e){ /* unique violation 등 무시 */ }
-    }else if(prevRecord.status==='pending'){
-      // 기상은 했지만 인증 못함 -> failed, 시들기 증가
+    }else if(rec.status==='pending'){
+      consecutiveMiss++;
+      const newWilt = Math.min(3, consecutiveMiss);
       try{
-        const newWilt = Math.min(3,(prevRecord.wilting_level||0)+1);
-        const { error } = await sb.from('daily_records').update({status:'failed', wilting_level:newWilt}).eq('id', prevRecord.id);
-        if(!error){ prevRecord.status='failed'; prevRecord.wilting_level=newWilt; }
+        const { error } = await sb.from('daily_records').update({status:'failed', wilting_level:newWilt}).eq('id', rec.id);
+        if(!error){ rec.status='failed'; rec.wilting_level=newWilt; }
       }catch(e){ console.error(e); }
+    }else if(rec.status==='failed'){
+      consecutiveMiss = Math.max(consecutiveMiss+1, rec.wilting_level||1);
+    }else if(rec.status==='success'){
+      consecutiveMiss = 0;
     }
   }
-
-  // 오늘 record가 pending인데 골든타임이 지났다면 -> 시들기 표시 (status는 자정에 failed로 전환되므로 여기선 비주얼만)
+  myRecords.sort((a,b)=>a.day-b.day);
 }
 
 /* ================== 앱 초기화 ================== */

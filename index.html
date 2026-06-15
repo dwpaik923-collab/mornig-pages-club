@@ -113,6 +113,13 @@
     display:inline-flex;align-items:center;gap:7px;margin-top:16px;padding:6px 14px;border-radius:30px;
     background:rgba(255,255,255,.16);backdrop-filter:blur(4px);font-size:13px;font-weight:500;border:1px solid rgba(255,255,255,.25);
   }
+  .wake-info{
+    display:flex;gap:14px;margin-top:14px;padding:12px 16px;border-radius:14px;
+    background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);font-size:13px;
+  }
+  .wake-info .wi-item{display:flex;flex-direction:column;gap:2px;}
+  .wake-info .wi-label{font-size:11px;opacity:.7;}
+  .wake-info .wi-value{font-family:'Gowun Batang',serif;font-size:17px;font-weight:700;}
 
   .card{background:var(--paper);margin:18px;border-radius:22px;padding:22px;box-shadow:var(--shadow);}
   .card h2{font-family:'Gowun Batang',serif;font-size:19px;margin-bottom:4px;}
@@ -155,6 +162,17 @@
   .act .ic{font-size:18px;}
   .badge-private{font-size:11px;background:var(--paper-2);color:var(--ink-soft);padding:2px 8px;border-radius:10px;font-weight:500;}
   .empty{text-align:center;color:var(--ink-soft);font-size:14px;padding:60px 30px;}
+
+  /* comments */
+  .comment-row{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--paper-2);}
+  .comment-row:last-child{border-bottom:none;}
+  .comment-avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px;flex-shrink:0;}
+  .comment-body{flex:1;}
+  .comment-name{font-weight:700;font-size:13px;}
+  .comment-text{font-size:13px;margin-top:2px;white-space:pre-wrap;}
+  .comment-meta{font-size:11px;color:var(--ink-soft);margin-top:3px;display:flex;gap:10px;align-items:center;}
+  .comment-meta .del{color:var(--red);cursor:pointer;background:none;border:none;font-size:11px;font-family:'Noto Sans KR';padding:0;}
+  .comment-empty{color:var(--ink-soft);font-size:13px;text-align:center;padding:20px 0;}
 
   /* ---------- GARDEN ---------- */
   .garden-hero{margin:18px;background:linear-gradient(180deg,#cfe0d6,#eef3e7);border-radius:22px;padding:8px 0 0;box-shadow:var(--shadow);text-align:center;overflow:hidden;}
@@ -300,6 +318,7 @@
         <div class="quote" id="quote"></div>
       </div>
       <div class="daychip" id="dayChip">🌱 1일차 · 오늘도 시작해요</div>
+      <div class="wake-info" id="wakeInfo" style="display:none"></div>
     </div>
 
     <div class="card" id="wakeCard">
@@ -438,7 +457,7 @@
   </section>
 
   <!-- ============ nav ============ -->
-  <nav class="nav" id="mainNav">
+  <nav class="nav" id="mainNav" style="display:none">
     <button class="active" data-screen="home"><span class="ic">🌅</span>홈</button>
     <button data-screen="feed"><span class="ic">📷</span>피드</button>
     <button data-screen="garden"><span class="ic">🌱</span>정원</button>
@@ -468,8 +487,8 @@
         </div>
       </div>
       <div class="field">
-        <label>한 줄 소감</label>
-        <textarea id="noteInput" rows="3" placeholder="오늘 쓰면서 들었던 생각을 적어보세요"></textarea>
+        <label>오늘의 글 (소감, 생각, 다짐 등 자유롭게)</label>
+        <textarea id="noteInput" rows="4" placeholder="오늘 모닝페이지를 쓰면서 든 생각을 자유롭게 적어보세요. 사진과는 별개로, 글만 남겨도 좋아요."></textarea>
       </div>
       <div class="toggle-row">
         <span>비공개로 올리기 (관리자와 나만 볼 수 있어요)</span>
@@ -494,6 +513,19 @@
   <!-- post detail sheet -->
   <div class="overlay" id="detailOverlay">
     <div class="sheet" id="detailSheet"></div>
+  </div>
+
+  <!-- comment sheet -->
+  <div class="overlay" id="commentOverlay">
+    <div class="sheet">
+      <h2>댓글</h2>
+      <div id="commentList" style="margin-bottom:14px"></div>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <textarea id="commentInput" rows="1" placeholder="따뜻한 응원의 한마디를 남겨보세요" style="flex:1;resize:none"></textarea>
+        <button class="verify-btn" id="commentSubmitBtn" style="width:auto;margin-top:0;padding:12px 18px;flex-shrink:0">등록</button>
+      </div>
+      <button class="ghost" id="commentCloseBtn">닫기</button>
+    </div>
   </div>
 
   <div class="toast" id="toast"></div>
