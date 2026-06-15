@@ -252,9 +252,12 @@ async function loadMyData(){
 /* ================== 명언 ================== */
 async function setQuote(){
   try{
-    const { data } = await sb.from('quotes').select('*').eq('is_active', true);
+    const day = getCurrentDay();
+    const { data } = await sb.from('quotes').select('*').eq('is_active', true).order('order_num', {ascending:true, nullsFirst:false});
     if(data && data.length){
-      const q = data[Math.floor(Math.random()*data.length)];
+      // day번째(1-indexed) 명언을 우선 사용, 부족하면 순환
+      const idx = (day-1) % data.length;
+      const q = data[idx];
       $('#quote').innerHTML = `"${escapeHtml(q.quote_text)}"${q.author?`<span class="by">— ${escapeHtml(q.author)}</span>`:''}`;
     }else{
       $('#quote').innerHTML = `"오늘도 세 장, 나에게 건네는 인사."`;
@@ -974,13 +977,27 @@ async function renderAdminUsers(){
 }
 
 async function renderAdminQuotes(){
-  const { data } = await sb.from('quotes').select('*').order('created_at',{ascending:true});
+  const { data } = await sb.from('quotes').select('*').order('order_num',{ascending:true, nullsFirst:false}).order('created_at',{ascending:true});
   allQuotes = data || [];
-  $('#quoteList').innerHTML = allQuotes.map(q=>`
+
+  // order_num이 없는 항목 보정 (기존 데이터 호환)
+  let needsFix = false;
+  allQuotes.forEach((q,i)=>{ if(q.order_num==null){ q.order_num = i+1; needsFix = true; } });
+  if(needsFix){
+    for(const q of allQuotes){
+      await sb.from('quotes').update({order_num:q.order_num}).eq('id', q.id);
+    }
+  }
+
+  $('#quoteList').innerHTML = allQuotes.map((q,i)=>`
     <div class="list-item">
       <div class="row1">
+        <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
+          <button data-up="${q.id}" ${i===0?'disabled':''} style="border:none;background:var(--paper-2);border-radius:8px;width:26px;height:22px;cursor:pointer;font-size:11px;${i===0?'opacity:.3':''}">▲</button>
+          <button data-down="${q.id}" ${i===allQuotes.length-1?'disabled':''} style="border:none;background:var(--paper-2);border-radius:8px;width:26px;height:22px;cursor:pointer;font-size:11px;${i===allQuotes.length-1?'opacity:.3':''}">▼</button>
+        </div>
         <div style="flex:1">
-          <div class="title">${escapeHtml(q.quote_text)}</div>
+          <div class="title">${i+1<=21?`<span style="color:var(--sage-deep);font-weight:700">${i+1}일차 ·</span> `:'<span style="color:var(--ink-soft)">예비 ·</span> '}${escapeHtml(q.quote_text)}</div>
           <div class="desc">${q.author?escapeHtml(q.author):'작자 미상'}</div>
         </div>
         <div class="li-actions">
@@ -1001,6 +1018,23 @@ async function renderAdminQuotes(){
     await sb.from('quotes').delete().eq('id', b.dataset.delQ);
     await renderAdminQuotes();
   });
+  $$('#quoteList [data-up]').forEach(b=>b.onclick=()=>moveQuote(b.dataset.up, -1));
+  $$('#quoteList [data-down]').forEach(b=>b.onclick=()=>moveQuote(b.dataset.down, 1));
+}
+
+async function moveQuote(id, dir){
+  const idx = allQuotes.findIndex(q=>q.id===id);
+  const swapIdx = idx+dir;
+  if(swapIdx<0 || swapIdx>=allQuotes.length) return;
+
+  const a = allQuotes[idx], b = allQuotes[swapIdx];
+  const aOrder = a.order_num, bOrder = b.order_num;
+
+  try{
+    await sb.from('quotes').update({order_num:bOrder}).eq('id', a.id);
+    await sb.from('quotes').update({order_num:aOrder}).eq('id', b.id);
+    await renderAdminQuotes();
+  }catch(e){ console.error(e); toast('순서 변경 중 오류가 발생했어요.'); }
 }
 
 $('#addQuoteBtn').onclick = async ()=>{
@@ -1008,7 +1042,8 @@ $('#addQuoteBtn').onclick = async ()=>{
   const author = $('#newQuoteAuthor').value.trim();
   if(!text){ toast('명언 내용을 입력해주세요.'); return; }
   try{
-    await sb.from('quotes').insert({quote_text:text, author, is_active:true});
+    const maxOrder = allQuotes.reduce((m,q)=>Math.max(m, q.order_num||0), 0);
+    await sb.from('quotes').insert({quote_text:text, author, is_active:true, order_num: maxOrder+1});
     $('#newQuoteText').value=''; $('#newQuoteAuthor').value='';
     toast('명언이 추가됐어요.');
     await renderAdminQuotes();
