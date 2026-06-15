@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1b1f3b">
+<title>Good Morning Page Club</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Nanum+Pen+Script&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --night:#1b1f3b;
+    --dusk:#3d3a6b;
+    --rose:#e98a7d;
+    --peach:#f6b083;
+    --sun:#ffce7a;
+    --paper:#fbf7f0;
+    --paper-2:#f3ecdf;
+    --ink:#2a2730;
+    --ink-soft:#6d6675;
+    --sage:#8ba888;
+    --sage-deep:#5c7a5a;
+    --soil:#9a7b5a;
+    --line:#e4dccd;
+    --green:#7bc47f;
+    --yellow:#f4c95d;
+    --red:#e9694a;
+    --shadow:0 8px 30px rgba(43,39,48,.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:'Noto Sans KR',sans-serif;
+    background:var(--paper-2);
+    color:var(--ink);
+    line-height:1.6;
+    display:flex;
+    justify-content:center;
+  }
+  .app{
+    width:100%;
+    max-width:460px;
+    min-height:100vh;
+    background:var(--paper);
+    position:relative;
+    padding-bottom:78px;
+    overflow-x:hidden;
+  }
+
+  /* ---------- screens ---------- */
+  .screen{display:none;animation:fade .4s ease;}
+  .screen.active{display:block;}
+  @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+
+  /* ---------- AUTH ---------- */
+  .auth-wrap{
+    min-height:100vh;display:flex;flex-direction:column;justify-content:center;
+    padding:40px 28px;background:linear-gradient(180deg,var(--night) 0%,var(--dusk) 45%,var(--rose) 100%);
+    color:#fff;
+  }
+  .auth-logo{font-family:'Gowun Batang',serif;font-size:28px;font-weight:700;text-align:center;margin-bottom:6px;}
+  .auth-sub{text-align:center;font-size:13px;opacity:.75;margin-bottom:34px;letter-spacing:1px;}
+  .auth-card{background:var(--paper);border-radius:22px;padding:26px 22px;box-shadow:var(--shadow);color:var(--ink);}
+  .auth-card h2{font-family:'Gowun Batang',serif;font-size:20px;margin-bottom:16px;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:13px;font-weight:500;margin-bottom:7px;}
+  input[type=text],input[type=password],input[type=email],input[type=date],textarea,select{
+    width:100%;border:1.5px solid var(--line);border-radius:14px;padding:12px;
+    font-family:'Noto Sans KR';font-size:14px;background:#fff;color:var(--ink);
+  }
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--sage);}
+  .primary,.wake-btn,.verify-btn{
+    width:100%;border:none;cursor:pointer;
+    font-family:'Noto Sans KR';font-weight:700;font-size:16px;
+    padding:15px;border-radius:16px;margin-top:6px;
+    transition:transform .15s ease,box-shadow .15s ease,opacity .2s;
+  }
+  .primary{background:var(--ink);color:#fff;}
+  .wake-btn{background:linear-gradient(120deg,var(--rose),var(--peach));color:#fff;box-shadow:0 6px 18px rgba(233,138,125,.4);}
+  .verify-btn{background:var(--sage-deep);color:#fff;box-shadow:0 6px 18px rgba(92,122,90,.35);}
+  .primary:active,.wake-btn:active,.verify-btn:active{transform:scale(.97);}
+  .primary:disabled,.wake-btn:disabled,.verify-btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none;}
+  .switch-link{text-align:center;margin-top:16px;font-size:13px;color:var(--ink-soft);}
+  .switch-link a{color:var(--rose);font-weight:700;cursor:pointer;text-decoration:none;}
+  .auth-error{background:#fdeee9;color:var(--red);padding:10px 14px;border-radius:12px;font-size:13px;margin-bottom:14px;display:none;}
+  .auth-error.show{display:block;}
+
+  /* ---------- HOME ---------- */
+  .sky{
+    position:relative;
+    padding:30px 24px 38px;
+    background:linear-gradient(180deg,var(--night) 0%,var(--dusk) 38%,var(--rose) 74%,var(--peach) 100%);
+    color:#fff;overflow:hidden;
+  }
+  .sky .stars{position:absolute;inset:0;opacity:.7;pointer-events:none;}
+  .sky .star{position:absolute;width:2px;height:2px;background:#fff;border-radius:50%;animation:twinkle 3s infinite;}
+  @keyframes twinkle{0%,100%{opacity:.2;}50%{opacity:.9;}}
+  .toprow{display:flex;justify-content:space-between;align-items:flex-start;}
+  .eyebrow{font-size:12px;letter-spacing:3px;text-transform:uppercase;opacity:.75;font-weight:500;}
+  .logout-btn{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);color:#fff;font-size:11px;padding:5px 10px;border-radius:20px;cursor:pointer;font-family:'Noto Sans KR';}
+  .quote-box{
+    margin-top:16px;padding:18px 18px 16px;border-radius:18px;
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+    backdrop-filter:blur(6px);
+  }
+  .quote{font-family:'Nanum Pen Script',cursive;font-size:26px;line-height:1.4;text-shadow:0 2px 12px rgba(0,0,0,.2);}
+  .quote .by{display:block;font-size:16px;opacity:.85;margin-top:8px;font-family:'Noto Sans KR';font-weight:500;}
+  .daychip{
+    display:inline-flex;align-items:center;gap:7px;margin-top:16px;padding:6px 14px;border-radius:30px;
+    background:rgba(255,255,255,.16);backdrop-filter:blur(4px);font-size:13px;font-weight:500;border:1px solid rgba(255,255,255,.25);
+  }
+
+  .card{background:var(--paper);margin:18px;border-radius:22px;padding:22px;box-shadow:var(--shadow);}
+  .card h2{font-family:'Gowun Batang',serif;font-size:19px;margin-bottom:4px;}
+  .card .sub{color:var(--ink-soft);font-size:13px;}
+
+  /* golden timer ring */
+  .timer-wrap{margin:18px;border-radius:22px;background:#fff;box-shadow:var(--shadow);padding:26px 22px;text-align:center;display:none;}
+  .timer-wrap.show{display:block;}
+  .ring-box{position:relative;width:200px;height:200px;margin:0 auto 14px;}
+  .ring-box svg{transform:rotate(-90deg);}
+  .ring-bg{fill:none;stroke:var(--paper-2);stroke-width:14;}
+  .ring-prog{fill:none;stroke:var(--green);stroke-width:14;stroke-linecap:round;transition:stroke-dashoffset 1s linear,stroke .6s;}
+  .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .ring-time{font-family:'Gowun Batang',serif;font-size:34px;font-weight:700;}
+  .ring-time.late{color:var(--red);}
+  .ring-sub{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .timer-msg{font-size:14px;font-weight:500;margin:14px 0 4px;padding:10px;border-radius:12px;transition:.4s;}
+  .timer-msg.green{background:#eaf7eb;color:#3f7a45;}
+  .timer-msg.yellow{background:#fdf6e3;color:#9c7a1f;}
+  .timer-msg.red{background:#fdeae5;color:#c0432a;}
+
+  /* ---------- FEED ---------- */
+  .pagehead{padding:22px 22px 6px;}
+  .pagehead h1{font-family:'Gowun Batang',serif;font-size:24px;}
+  .pagehead p{color:var(--ink-soft);font-size:13px;}
+  .post{background:#fff;margin:14px 18px;border-radius:20px;box-shadow:var(--shadow);overflow:hidden;}
+  .post-top{display:flex;align-items:center;gap:10px;padding:13px 15px;}
+  .avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:15px;flex-shrink:0;}
+  .post-top .name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;}
+  .post-top .meta{font-size:12px;color:var(--ink-soft);}
+  .post-top .mood{margin-left:auto;font-size:22px;}
+  .post-imgs{display:grid;grid-auto-flow:column;grid-auto-columns:90%;gap:4px;overflow-x:auto;scroll-snap-type:x mandatory;}
+  .post-imgs img{width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--paper-2);display:block;scroll-snap-align:start;border-radius:0;}
+  .post-img.placeholder{display:flex;align-items:center;justify-content:center;color:var(--ink-soft);font-family:'Nanum Pen Script';font-size:30px;background:repeating-linear-gradient(180deg,#fbf7f0,#fbf7f0 27px,#e9e0d0 28px);aspect-ratio:4/3;}
+  .post-body{padding:12px 16px 16px;}
+  .post-note{font-size:14px;margin-bottom:10px;white-space:pre-wrap;}
+  .post-actions{display:flex;gap:18px;align-items:center;}
+  .act{display:flex;align-items:center;gap:5px;background:none;border:none;cursor:pointer;font-size:14px;color:var(--ink-soft);font-family:'Noto Sans KR';}
+  .act.on{color:var(--rose);font-weight:700;}
+  .act .ic{font-size:18px;}
+  .badge-private{font-size:11px;background:var(--paper-2);color:var(--ink-soft);padding:2px 8px;border-radius:10px;font-weight:500;}
+  .empty{text-align:center;color:var(--ink-soft);font-size:14px;padding:60px 30px;}
+
+  /* ---------- GARDEN ---------- */
+  .garden-hero{margin:18px;background:linear-gradient(180deg,#cfe0d6,#eef3e7);border-radius:22px;padding:8px 0 0;box-shadow:var(--shadow);text-align:center;overflow:hidden;}
+  .plant-stage{height:230px;display:flex;align-items:flex-end;justify-content:center;}
+  .garden-cap{padding:14px 20px 20px;}
+  .garden-cap .stagename{font-family:'Gowun Batang',serif;font-size:20px;}
+  .garden-cap .sub{color:var(--sage-deep);font-size:13px;font-weight:500;}
+  .progress{height:10px;background:var(--paper-2);border-radius:10px;margin:14px 0 4px;overflow:hidden;}
+  .progress > div{height:100%;background:linear-gradient(90deg,var(--sage),var(--sage-deep));border-radius:10px;transition:width .8s;}
+
+  .report-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 18px;}
+  .stat{background:#fff;border-radius:18px;padding:16px;box-shadow:var(--shadow);}
+  .stat .n{font-family:'Gowun Batang',serif;font-size:28px;font-weight:700;}
+  .stat .l{font-size:12px;color:var(--ink-soft);}
+
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin:14px 18px;}
+  .grid3 .cell{aspect-ratio:1;background:var(--paper-2);border-radius:8px;overflow:hidden;cursor:pointer;position:relative;}
+  .grid3 .cell img{width:100%;height:100%;object-fit:cover;}
+  .grid3 .cell .ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-family:'Nanum Pen Script';font-size:22px;color:var(--ink-soft);background:repeating-linear-gradient(180deg,#fbf7f0,#fbf7f0 16px,#e9e0d0 17px);}
+  .grid3 .cell .lockbadge{position:absolute;top:5px;right:5px;font-size:13px;background:rgba(0,0,0,.35);color:#fff;border-radius:6px;padding:1px 4px;}
+  .grid3 .cell .daynum{position:absolute;bottom:5px;left:6px;font-size:11px;color:#fff;background:rgba(0,0,0,.35);border-radius:6px;padding:1px 6px;}
+
+  /* ---------- DASHBOARD ---------- */
+  .bigstat{margin:18px;background:linear-gradient(135deg,var(--night),var(--dusk));color:#fff;border-radius:22px;padding:24px;box-shadow:var(--shadow);}
+  .bigstat .ring{display:flex;align-items:center;gap:18px;}
+  .bigstat .num{font-family:'Gowun Batang',serif;font-size:34px;font-weight:700;}
+  .bigstat .lab{opacity:.8;font-size:13px;}
+  .everyone{margin:18px;}
+  .everyone h2{font-family:'Gowun Batang',serif;font-size:18px;margin-bottom:4px;}
+  .everyone .sub{color:var(--ink-soft);font-size:13px;margin-bottom:12px;}
+  .garden-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .mini{background:#fff;border-radius:14px;padding:8px 4px 6px;text-align:center;box-shadow:var(--shadow);}
+  .mini.done{background:linear-gradient(180deg,#eef6ea,#fff);}
+  .mini .mn{font-size:11px;font-weight:500;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mini .dot{font-size:10px;}
+
+  /* ---------- ADMIN ---------- */
+  .admin-tabs{display:flex;gap:8px;margin:18px;overflow-x:auto;}
+  .admin-tabs button{flex-shrink:0;border:1.5px solid var(--line);background:#fff;border-radius:14px;padding:9px 14px;font-size:13px;font-weight:500;cursor:pointer;font-family:'Noto Sans KR';color:var(--ink-soft);}
+  .admin-tabs button.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .admin-panel{display:none;}
+  .admin-panel.active{display:block;}
+  .list-item{background:#fff;border-radius:16px;padding:14px 16px;margin:0 18px 10px;box-shadow:var(--shadow);}
+  .list-item .row1{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .list-item .title{font-weight:700;font-size:14px;}
+  .list-item .desc{font-size:12px;color:var(--ink-soft);margin-top:3px;}
+  .li-actions{display:flex;gap:6px;}
+  .li-actions button{border:none;background:var(--paper-2);border-radius:10px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:'Noto Sans KR';}
+  .li-actions button.danger{background:#fdeae5;color:var(--red);}
+  .progress-mini{height:6px;background:var(--paper-2);border-radius:6px;margin-top:8px;overflow:hidden;}
+  .progress-mini > div{height:100%;background:var(--sage-deep);}
+
+  /* ---------- modal / sheet ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(27,31,59,.55);display:none;align-items:flex-end;justify-content:center;z-index:50;}
+  .overlay.show{display:flex;}
+  .overlay.center{align-items:center;}
+  .sheet{width:100%;max-width:460px;background:var(--paper);border-radius:24px 24px 0 0;padding:24px 22px 30px;animation:slideup .35s ease;max-height:88vh;overflow-y:auto;}
+  .overlay.center .sheet{border-radius:22px;margin:20px;animation:popup .3s ease;}
+  @keyframes slideup{from{transform:translateY(100%);}to{transform:none;}}
+  @keyframes popup{from{transform:scale(.9);opacity:0;}to{transform:none;opacity:1;}}
+  .sheet h2{font-family:'Gowun Batang',serif;font-size:21px;margin-bottom:14px;}
+  .uploader{border:2px dashed var(--line);border-radius:16px;padding:20px;text-align:center;color:var(--ink-soft);cursor:pointer;font-size:13px;}
+  .img-preview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px;}
+  .img-preview-grid .pv{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;}
+  .img-preview-grid .pv img{width:100%;height:100%;object-fit:cover;}
+  .img-preview-grid .pv .rm{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:1;}
+  .moods{display:flex;gap:8px;}
+  .moods button{flex:1;font-size:24px;padding:10px 0;border:1.5px solid var(--line);border-radius:14px;background:#fff;cursor:pointer;transition:.15s;}
+  .moods button.sel{border-color:var(--rose);background:#fdeee9;transform:scale(1.05);}
+  .ghost{background:none;border:none;color:var(--ink-soft);font-size:14px;cursor:pointer;width:100%;margin-top:8px;font-family:'Noto Sans KR';}
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:4px 2px;font-size:14px;}
+  .switch{position:relative;width:44px;height:26px;background:var(--line);border-radius:20px;cursor:pointer;transition:.2s;flex-shrink:0;}
+  .switch.on{background:var(--sage-deep);}
+  .switch .knob{position:absolute;top:3px;left:3px;width:20px;height:20px;background:#fff;border-radius:50%;transition:.2s;}
+  .switch.on .knob{left:21px;}
+
+  /* celebration */
+  .confetti{position:fixed;top:-10px;width:9px;height:14px;z-index:100;pointer-events:none;border-radius:2px;}
+  .celebrate-sheet{text-align:center;}
+  .celebrate-emoji{font-size:54px;margin-bottom:6px;}
+  .celebrate-sheet h2{justify-content:center;display:flex;}
+  .streak-badge{display:inline-block;background:var(--sun);color:#7a4e00;font-weight:700;padding:8px 18px;border-radius:30px;font-size:15px;margin:10px 0;}
+  .celebrate-msg{font-size:14px;color:var(--ink-soft);margin-bottom:14px;line-height:1.7;}
+
+  /* ---------- nav ---------- */
+  .nav{position:fixed;bottom:0;width:100%;max-width:460px;display:flex;background:rgba(251,247,240,.95);backdrop-filter:blur(10px);border-top:1px solid var(--line);z-index:40;}
+  .nav button{flex:1;background:none;border:none;padding:11px 0 8px;cursor:pointer;color:var(--ink-soft);font-family:'Noto Sans KR';font-size:11px;display:flex;flex-direction:column;align-items:center;gap:3px;}
+  .nav button .ic{font-size:21px;}
+  .nav button.active{color:var(--rose);font-weight:700;}
+
+  .toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:11px 20px;border-radius:30px;font-size:14px;opacity:0;transition:.3s;z-index:60;white-space:nowrap;max-width:90%;overflow:hidden;text-overflow:ellipsis;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .loading-overlay{position:fixed;inset:0;background:var(--paper);display:flex;align-items:center;justify-content:center;z-index:200;font-family:'Gowun Batang',serif;font-size:18px;color:var(--ink-soft);}
+  .loading-overlay.hide{display:none;}
+</style>
+</head>
+<body>
+<div class="loading-overlay" id="loadingOverlay">불러오는 중...</div>
+
+<div class="app" id="app" style="display:none">
+
+  <!-- ============ AUTH ============ -->
+  <section class="screen active" id="authScreen">
+    <div class="auth-wrap">
+      <div class="auth-logo">🌅 Good Morning Page Club</div>
+      <div class="auth-sub">21 DAYS · MORNING PAGES CHALLENGE</div>
+
+      <!-- LOGIN -->
+      <div class="auth-card" id="loginCard">
+        <h2>로그인</h2>
+        <div class="auth-error" id="loginError"></div>
+        <div class="field"><label>아이디</label><input type="text" id="loginUsername" autocomplete="username"></div>
+        <div class="field"><label>비밀번호</label><input type="password" id="loginPassword" autocomplete="current-password"></div>
+        <button class="primary" id="loginBtn">로그인</button>
+        <div class="switch-link">계정이 없으신가요? <a id="goSignup">회원가입</a></div>
+      </div>
+
+      <!-- SIGNUP -->
+      <div class="auth-card" id="signupCard" style="display:none">
+        <h2>회원가입</h2>
+        <div class="auth-error" id="signupError"></div>
+        <div class="field"><label>아이디</label><input type="text" id="suUsername"></div>
+        <div class="field"><label>비밀번호</label><input type="password" id="suPassword"></div>
+        <div class="field"><label>닉네임</label><input type="text" id="suNickname"></div>
+        <div class="field"><label>이메일</label><input type="email" id="suEmail"></div>
+        <div class="field"><label>참여 인증코드</label><input type="text" id="suCode" placeholder="운영자에게 받은 코드를 입력하세요"></div>
+        <button class="primary" id="signupBtn">가입하고 시작하기</button>
+        <div class="switch-link">이미 계정이 있으신가요? <a id="goLogin">로그인</a></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HOME ============ -->
+  <section class="screen" id="home">
+    <div class="sky" id="sky">
+      <div class="stars" id="stars"></div>
+      <div class="toprow">
+        <div class="eyebrow">GOOD MORNING PAGE CLUB · 21 DAYS</div>
+        <button class="logout-btn" id="logoutBtn">로그아웃</button>
+      </div>
+      <div class="quote-box">
+        <div class="quote" id="quote"></div>
+      </div>
+      <div class="daychip" id="dayChip">🌱 1일차 · 오늘도 시작해요</div>
+    </div>
+
+    <div class="card" id="wakeCard">
+      <h2>아침을 열어볼까요?</h2>
+      <p class="sub">일어나자마자 버튼을 누르면 골든타임 90분이 시작돼요. 그 안에 모닝페이지를 쓰고 인증하면 성공! 자정까지 기상 버튼을 누르지 않으면 그날은 자동으로 인증 실패 처리돼요.</p>
+      <button class="wake-btn" id="wakeBtn">☀️ 방금 일어났어요</button>
+    </div>
+
+    <div class="timer-wrap" id="timerWrap">
+      <div class="ring-box">
+        <svg width="200" height="200" viewBox="0 0 200 200">
+          <circle class="ring-bg" cx="100" cy="100" r="86"/>
+          <circle class="ring-prog" id="ringProg" cx="100" cy="100" r="86" stroke-dasharray="540" stroke-dashoffset="0"/>
+        </svg>
+        <div class="ring-center">
+          <div class="ring-time" id="ringTime">90:00</div>
+          <div class="ring-sub" id="ringSub">골든타임 남음</div>
+        </div>
+      </div>
+      <div class="timer-msg green" id="timerMsg">여유로워요! 천천히 세 장을 채워보세요 🌿</div>
+      <button class="verify-btn" id="verifyBtn">📷 모닝페이지 인증하기</button>
+    </div>
+  </section>
+
+  <!-- ============ FEED ============ -->
+  <section class="screen" id="feed">
+    <div class="pagehead">
+      <h1>오늘의 페이지</h1>
+      <p>함께 쓰는 사람들의 기록</p>
+    </div>
+    <div id="postList"></div>
+  </section>
+
+  <!-- ============ GARDEN ============ -->
+  <section class="screen" id="garden">
+    <div class="pagehead">
+      <h1>나의 정원</h1>
+      <p>하루하루가 한 뼘씩 자라나요</p>
+    </div>
+    <div class="garden-hero">
+      <div class="plant-stage" id="plantStage"></div>
+      <div class="garden-cap">
+        <div class="stagename" id="stageName">씨앗</div>
+        <div class="sub" id="stageSub">첫 페이지를 기다리는 중</div>
+        <div class="progress"><div id="gardenBar" style="width:0%"></div></div>
+        <div class="sub" id="gardenCount" style="color:var(--ink-soft)">0 / 21일 완료</div>
+      </div>
+    </div>
+
+    <div class="report-grid">
+      <div class="stat"><div class="n" id="stStreak">0</div><div class="l">연속 기록</div></div>
+      <div class="stat"><div class="n" id="stTotal">0</div><div class="l">전체 인증</div></div>
+    </div>
+
+    <div class="pagehead" style="padding-top:6px"><h1 style="font-size:18px">내 피드</h1><p>탭하면 자세히 볼 수 있어요</p></div>
+    <div class="grid3" id="myGrid"></div>
+  </section>
+
+  <!-- ============ DASHBOARD ============ -->
+  <section class="screen" id="dash">
+    <div class="pagehead">
+      <h1>우리들의 현황</h1>
+      <p>혼자가 아니라 같이 가고 있어요</p>
+    </div>
+    <div class="bigstat">
+      <div class="ring">
+        <svg width="92" height="92" viewBox="0 0 92 92">
+          <circle cx="46" cy="46" r="40" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="10"/>
+          <circle id="ringProg2" cx="46" cy="46" r="40" fill="none" stroke="#ffce7a" stroke-width="10" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="251" transform="rotate(-90 46 46)"/>
+        </svg>
+        <div>
+          <div class="num" id="dashFrac">0/0</div>
+          <div class="lab">오늘 인증을 마친 멤버</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="everyone">
+      <h2>오늘 모두의 정원</h2>
+      <p class="sub">초록 카드는 오늘 인증을 마친 멤버예요</p>
+      <div class="garden-grid" id="gardenGrid"></div>
+    </div>
+
+    <div style="margin:18px;">
+      <button class="primary" id="shareBtn">🔗 우리 정원 공유하기</button>
+    </div>
+  </section>
+
+  <!-- ============ ADMIN ============ -->
+  <section class="screen" id="admin">
+    <div class="pagehead">
+      <h1>관리자</h1>
+      <p>회차, 회원, 명언, 피드를 관리해요</p>
+    </div>
+    <div class="admin-tabs">
+      <button class="active" data-panel="adminSession">회차 설정</button>
+      <button data-panel="adminUsers">회원 관리</button>
+      <button data-panel="adminQuotes">명언 관리</button>
+      <button data-panel="adminPosts">피드 관리</button>
+    </div>
+
+    <!-- session -->
+    <div class="admin-panel active" id="adminSession">
+      <div class="card">
+        <h2 id="sessionTitle">현재 회차</h2>
+        <p class="sub" id="sessionDates">-</p>
+        <div class="field" style="margin-top:14px"><label>회차 이름</label><input type="text" id="sNamе" id="sName"></div>
+        <div class="field"><label>시작일</label><input type="date" id="sStart"></div>
+        <div class="field"><label>종료일</label><input type="date" id="sEnd"></div>
+        <div class="field"><label>참여 인증코드</label><input type="text" id="sCode"></div>
+        <button class="primary" id="saveSessionBtn">회차 정보 저장</button>
+        <button class="ghost" id="newSessionBtn">+ 새 회차 시작 (모든 회원 초기화)</button>
+      </div>
+    </div>
+
+    <!-- users -->
+    <div class="admin-panel" id="adminUsers">
+      <div id="userList"></div>
+    </div>
+
+    <!-- quotes -->
+    <div class="admin-panel" id="adminQuotes">
+      <div class="card" style="margin-bottom:10px">
+        <h2>명언 추가</h2>
+        <div class="field"><label>명언</label><textarea id="newQuoteText" rows="2"></textarea></div>
+        <div class="field"><label>말한 사람 (선택)</label><input type="text" id="newQuoteAuthor"></div>
+        <button class="primary" id="addQuoteBtn">추가하기</button>
+      </div>
+      <div id="quoteList"></div>
+    </div>
+
+    <!-- posts -->
+    <div class="admin-panel" id="adminPosts">
+      <div id="adminPostList"></div>
+    </div>
+  </section>
+
+  <!-- ============ nav ============ -->
+  <nav class="nav" id="mainNav">
+    <button class="active" data-screen="home"><span class="ic">🌅</span>홈</button>
+    <button data-screen="feed"><span class="ic">📷</span>피드</button>
+    <button data-screen="garden"><span class="ic">🌱</span>정원</button>
+    <button data-screen="dash"><span class="ic">👥</span>현황</button>
+    <button data-screen="admin" id="adminNavBtn" style="display:none"><span class="ic">⚙️</span>관리자</button>
+  </nav>
+
+  <!-- verify sheet -->
+  <div class="overlay" id="overlay">
+    <div class="sheet">
+      <h2>모닝페이지 인증</h2>
+      <div class="field">
+        <label>손으로 쓴 페이지 사진 (최대 5장)</label>
+        <div class="uploader" id="uploader">📷 사진을 추가해주세요<br><span style="font-size:12px">(생략 가능. 줄노트 모양으로 표시돼요)</span>
+          <input type="file" accept="image/*" id="fileInput" multiple hidden>
+        </div>
+        <div class="img-preview-grid" id="imgPreview"></div>
+      </div>
+      <div class="field">
+        <label>오늘의 컨디션</label>
+        <div class="moods" id="moods">
+          <button data-mood="🌞" data-score="5">🌞</button>
+          <button data-mood="🙂" data-score="4">🙂</button>
+          <button data-mood="😐" data-score="3">😐</button>
+          <button data-mood="😮‍💨" data-score="2">😮‍💨</button>
+          <button data-mood="🌧️" data-score="1">🌧️</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>한 줄 소감</label>
+        <textarea id="noteInput" rows="3" placeholder="오늘 쓰면서 들었던 생각을 적어보세요"></textarea>
+      </div>
+      <div class="toggle-row">
+        <span>비공개로 올리기 (관리자와 나만 볼 수 있어요)</span>
+        <div class="switch" id="privateSwitch"><div class="knob"></div></div>
+      </div>
+      <button class="verify-btn" id="submitBtn" style="margin-top:14px">인증 완료하기</button>
+      <button class="ghost" id="cancelBtn">닫기</button>
+    </div>
+  </div>
+
+  <!-- celebrate sheet -->
+  <div class="overlay center" id="celebrateOverlay">
+    <div class="sheet celebrate-sheet">
+      <div class="celebrate-emoji">🌱</div>
+      <h2>인증 성공!</h2>
+      <div class="streak-badge" id="streakBadge">3일 연속!</div>
+      <div class="celebrate-msg" id="celebrateMsg">오늘도 스스로와의 약속을 지켰어요. 작은 한 걸음이 모여 큰 나무가 됩니다.</div>
+      <button class="primary" id="celebrateCloseBtn">정원 보러가기</button>
+    </div>
+  </div>
+
+  <!-- post detail sheet -->
+  <div class="overlay" id="detailOverlay">
+    <div class="sheet" id="detailSheet"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
