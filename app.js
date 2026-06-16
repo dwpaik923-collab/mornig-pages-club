@@ -618,6 +618,7 @@ $('#submitBtn').onclick = async ()=>{
     $('#overlay').classList.remove('show');
     if(timerInterval) clearInterval(timerInterval);
     await setupWakeUI();
+    await renderHomeCards();
 
     showCelebration(newStreak);
   }catch(e){
@@ -1386,6 +1387,61 @@ async function checkFailures(){
   myRecords.sort((a,b)=>a.day-b.day);
 }
 
+/* ================== 홈 카드 렌더링 ================== */
+async function renderHomeCards(){
+  if(currentUser.is_admin) return;
+
+  // A) 미니 정원 카드
+  const completedCount = myRecords.filter(r=>r.status==='success'||r.status==='passed').length;
+  const stage = Math.min(PLANT_STAGE_COUNT-1, completedCount);
+  const lastRec = [...myRecords].sort((a,b)=>b.day-a.day)[0];
+  const wilting = (lastRec && lastRec.status==='failed') ? (lastRec.wilting_level||1) : 0;
+  const theme = currentUser.plant_theme || 'default';
+
+  $('#homePlantMini').innerHTML = miniPlantSVG(stage, wilting, theme);
+  $('#homeGardenStage').textContent = STAGE_INFO[stage][0] + (wilting>0?' 🍂':'');
+  $('#homeGardenSub').textContent = wilting>0 ? '오늘 인증하면 다시 생기를 찾아요 🌱' : STAGE_INFO[stage][1];
+  $('#homeStreak').textContent = (currentUser.streak||0)+'일';
+  $('#homeCompleted').textContent = completedCount+'회';
+
+  const successRecs = myRecords.filter(r=>r.status==='success'&&r.woke_at);
+  if(successRecs.length){
+    const times = successRecs.map(r=>kstTimeStr(r.woke_at)).sort();
+    $('#homeBest').textContent = times[0];
+  } else {
+    $('#homeBest').textContent = '-';
+  }
+  $('#homePass').textContent = currentUser.pass_used ? '사용함' : '미사용';
+  $('#homePass').style.color = currentUser.pass_used ? 'var(--rose)' : 'var(--sage-deep)';
+  $('#homeGardenBar').style.width = Math.min(100, completedCount/TOTAL_DAYS*100)+'%';
+  $('#homeGardenCard').style.display = 'block';
+
+  // B) 오늘 현황 카드
+  if(currentSession){
+    try{
+      const day = getCurrentDay();
+      const { data: users } = await sb.from('users').select('id').eq('current_session_id', currentSession.id).eq('is_admin', false);
+      const { data: recs } = await sb.from('daily_records').select('user_id,status').eq('session_id', currentSession.id).eq('day', day);
+      const total = (users||[]).length;
+      const done = (recs||[]).filter(r=>r.status==='success'||r.status==='passed').length;
+      const pct = total>0 ? done/total*100 : 0;
+
+      $('#homeTodayFrac').textContent = `${done}/${total}명 인증`;
+      $('#homeTodayBar').style.width = pct+'%';
+
+      const remaining = total - done;
+      let msg;
+      if(pct===100) msg='🏆 오늘 모두가 인증했어요! 퍼펙트 데이!';
+      else if(pct>=75) msg=`거의 다 왔어요! ${remaining}명만 더 하면 퍼펙트 데이예요 🔥`;
+      else if(pct>=50) msg=`절반 넘었어요! 함께 완주해요 💪`;
+      else if(done===0) msg='아직 아무도 인증하지 않았어요. 첫 번째가 되어볼까요? ☀️';
+      else msg=`${done}명이 먼저 시작했어요. 같이 해요 🌱`;
+      $('#homeTodayMsg').textContent = msg;
+      $('#homeTodayCard').style.display = 'block';
+    }catch(e){ console.error(e); }
+  }
+}
+
 /* ================== 패스 카드 ================== */
 $('#passBtn').onclick = async () => {
   if(currentUser.pass_used){ toast('패스 카드는 이미 사용했어요.'); return; }
@@ -1696,6 +1752,7 @@ async function init(){
     await loadMyData();
     await setupWakeUI();
     await renderGarden();
+    await renderHomeCards();
     checkPwaPopup();
   }else{
     showScreen('authScreen');

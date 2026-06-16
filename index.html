@@ -377,6 +377,38 @@
       <button class="pass-btn" id="passBtn" style="display:none">🛡️ 오늘은 패스할게요 <span style="font-size:12px;opacity:.7">(1회 한정)</span></button>
     </div>
 
+    <!-- 미니 정원 카드 -->
+    <div class="card" id="homeGardenCard" style="display:none">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div id="homePlantMini" style="flex-shrink:0"></div>
+        <div style="flex:1">
+          <div style="font-family:'Gowun Batang',serif;font-size:18px;font-weight:700" id="homeGardenStage">씨앗</div>
+          <div style="font-size:13px;color:var(--ink-soft);margin-top:2px" id="homeGardenSub">첫 페이지를 기다리는 중</div>
+          <div style="display:flex;gap:14px;margin-top:10px">
+            <div><div style="font-family:'Gowun Batang',serif;font-size:20px;font-weight:700" id="homeStreak">0</div><div style="font-size:11px;color:var(--ink-soft)">연속 기록</div></div>
+            <div><div style="font-family:'Gowun Batang',serif;font-size:20px;font-weight:700" id="homeCompleted">0</div><div style="font-size:11px;color:var(--ink-soft)">전체 인증</div></div>
+            <div><div style="font-family:'Gowun Batang',serif;font-size:20px;font-weight:700" id="homeBest">-</div><div style="font-size:11px;color:var(--ink-soft)">최단 기상</div></div>
+            <div><div style="font-family:'Gowun Batang',serif;font-size:16px;font-weight:700" id="homePass" style="color:var(--sage-deep)">미사용</div><div style="font-size:11px;color:var(--ink-soft)">패스 카드</div></div>
+          </div>
+          <div style="height:6px;background:var(--paper-2);border-radius:6px;margin-top:10px;overflow:hidden">
+            <div id="homeGardenBar" style="height:100%;background:linear-gradient(90deg,var(--sage),var(--sage-deep));border-radius:6px;transition:width .8s;width:0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 오늘 현황 카드 -->
+    <div class="card" id="homeTodayCard" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <h2 style="margin:0">오늘 현황</h2>
+        <span style="font-size:13px;color:var(--ink-soft)" id="homeTodayFrac">0/0명 인증</span>
+      </div>
+      <div style="height:8px;background:var(--paper-2);border-radius:8px;overflow:hidden">
+        <div id="homeTodayBar" style="height:100%;background:linear-gradient(90deg,var(--rose),var(--peach));border-radius:8px;transition:width .8s;width:0%"></div>
+      </div>
+      <div style="font-size:13px;color:var(--ink-soft);margin-top:8px" id="homeTodayMsg"></div>
+    </div>
+
     <div class="timer-wrap" id="timerWrap">
       <div class="ring-box">
         <svg width="200" height="200" viewBox="0 0 200 200">
@@ -437,14 +469,6 @@
         <button class="theme-btn" data-bg="dawn">🌅 새벽</button>
         <button class="theme-btn" data-bg="winter">❄️ 겨울 새벽</button>
       </div>
-    </div>
-
-    <!-- 통계 -->
-    <div class="report-grid">
-      <div class="stat"><div class="n" id="stStreak">0일</div><div class="l">연속 기록</div></div>
-      <div class="stat"><div class="n" id="stTotal">0회</div><div class="l">전체 인증</div></div>
-      <div class="stat"><div class="n" id="stBest">-</div><div class="l">최단 기상</div></div>
-      <div class="stat"><div class="n" id="stPass">미사용</div><div class="l">패스 카드</div></div>
     </div>
 
     <!-- 감정 변화 차트 -->
