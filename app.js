@@ -1656,12 +1656,11 @@ function scheduleHalfTimeNotif(wokeAt){
   if(remaining <= 0) return;
   halfTimeTimer = setTimeout(async () => {
     // 웹 푸시 발송 (백그라운드에서도 작동)
-    const { data: { user } } = await sb.auth.getUser();
-    if(user){
+    if(currentUser){
       fetch('/.netlify/functions/send-push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.id })
+        body: JSON.stringify({ user_id: currentUser.id })
       }).catch(() => {});
     }
     // 앱이 열려있을 때 토스트도 같이 표시
@@ -1704,12 +1703,11 @@ async function subscribePush(){
     }
 
     // Supabase에 구독 정보 저장
-    const { data: { user } } = await sb.auth.getUser();
-    if(!user) return;
+    if(!currentUser) return;
 
     const subJson = sub.toJSON();
     await sb.from('push_subscriptions').upsert({
-      user_id: user.id,
+      user_id: currentUser.id,
       endpoint: subJson.endpoint,
       p256dh: subJson.keys.p256dh,
       auth: subJson.keys.auth
