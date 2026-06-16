@@ -1670,7 +1670,12 @@ function scheduleHalfTimeNotif(wokeAt){
 
 // 알림 권한 요청 + 푸시 구독 (로그인 후)
 async function requestNotifPermission(){
-  if(!('Notification' in window)) return;
+  toast('🔔 알림 권한 확인 중...');
+  if(!('Notification' in window)){
+    toast('❌ Notification 미지원');
+    return;
+  }
+  toast('🔔 현재 권한: ' + Notification.permission);
   if(Notification.permission === 'default'){
     await Notification.requestPermission().catch(()=>{});
   }
