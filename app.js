@@ -1715,6 +1715,7 @@ async function subscribePush(){
 
   } catch(e) {
     console.warn('푸시 구독 실패:', e);
+    toast('푸시 구독 실패: ' + (e.message || e));
   }
 }
 
