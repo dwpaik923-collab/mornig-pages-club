@@ -270,6 +270,20 @@ async function setQuote(){
     $('#quote').innerHTML = `"오늘도 세 장, 나에게 건네는 인사."`;
   }
 }
+// KST 시간 문자열 반환 (HH:MM)
+function kstTimeStr(isoStr){
+  if(!isoStr) return '-';
+  const d = new Date(new Date(isoStr).getTime() + 9*60*60*1000);
+  const h = String(d.getUTCHours()).padStart(2,'0');
+  const m = String(d.getUTCMinutes()).padStart(2,'0');
+  return `${h}:${m}`;
+}
+// KST 날짜 문자열 반환 (YYYY. MM. DD.)
+function kstDateStr(isoStr){
+  if(!isoStr) return '-';
+  const d = new Date(new Date(isoStr).getTime() + 9*60*60*1000);
+  return `${d.getUTCFullYear()}. ${d.getUTCMonth()+1}. ${d.getUTCDate()}.`;
+}
 function escapeHtml(str){
   if(!str) return '';
   return str.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -319,7 +333,7 @@ async function setupWakeUI(){
     return;
   }
 
-  const wokeTimeStr = record.woke_at ? new Date(record.woke_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Seoul'}) : '-';
+  const wokeTimeStr = record.woke_at ? kstTimeStr(record.woke_at) : '-';
 
   if(record.status === 'success'){
     $('#wakeCard').style.display='block';
@@ -327,7 +341,7 @@ async function setupWakeUI(){
     $('#wakeBtn').textContent = '오늘 인증 완료 🌟';
     $('#timerWrap').classList.remove('show');
 
-    const verifiedTimeStr = record.verified_at ? new Date(record.verified_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Seoul'}) : '-';
+    const verifiedTimeStr = record.verified_at ? kstTimeStr(record.verified_at) : '-';
     $('#wakeInfo').style.display='flex';
     $('#wakeInfo').innerHTML = `
       <div class="wi-item"><span class="wi-label">⏰ 오늘 기상</span><span class="wi-value">${wokeTimeStr}</span></div>
@@ -350,11 +364,33 @@ async function setupWakeUI(){
   }
 
   // pending - 골든타임 진행 중 or 만료
+  // woke_at이 오늘 KST 날짜와 다르면 (어제 기록이 남은 경우) failed 처리
+  const wokeAtDateKST = record.woke_at
+    ? new Date(new Date(record.woke_at).getTime() + 9*60*60*1000).toISOString().slice(0,10)
+    : null;
+  if(wokeAtDateKST && wokeAtDateKST !== todayKST()){
+    try{
+      const newWilt = Math.min(3,(record.wilting_level||0)+1);
+      await sb.from('daily_records').update({status:'failed', wilting_level:newWilt}).eq('id', record.id);
+      record.status='failed'; record.wilting_level=newWilt;
+    }catch(e){ console.error(e); }
+    $('#wakeCard').style.display='block';
+    $('#wakeBtn').disabled = true;
+    $('#wakeBtn').textContent = '오늘은 인증 실패예요 🌧️';
+    $('#timerWrap').classList.remove('show');
+    $('#wakeInfo').style.display='flex';
+    $('#wakeInfo').innerHTML = `
+      <div class="wi-item"><span class="wi-label">⏰ 오늘 기상</span><span class="wi-value">-</span></div>
+      <div class="wi-item"><span class="wi-label">상태</span><span class="wi-value">미인증</span></div>
+    `;
+    return;
+  }
+
   $('#wakeCard').style.display='none';
   $('#timerWrap').classList.add('show');
   $('#wakeInfo').style.display='flex';
   $('#wakeInfo').innerHTML = `
-    <div class="wi-item"><span class="wi-label">⏰ 오늘 기상</span><span class="wi-value">${wokeTimeStr}</span></div>
+    <div class="wi-item"><span class="wi-label">⏰ 오늘 기상</span><span class="wi-value">${kstTimeStr(record.woke_at)}</span></div>
     <div class="wi-item"><span class="wi-label">상태</span><span class="wi-value">작성 중</span></div>
   `;
   startGoldenTimer(record);
@@ -644,7 +680,7 @@ async function renderFeed(){
   $('#postList').innerHTML = visible.map(p=>{
     const name = p.users?.nickname || '익명';
     const color = COLORS[hashCode(name)%COLORS.length];
-    const wokeTime = p.woke_at ? new Date(p.woke_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Seoul'}) : '-';
+    const wokeTime = p.woke_at ? kstTimeStr(p.woke_at) : '-';
     const timeAgo = timeAgoStr(p.created_at);
     const liked = myLikes.has(p.id);
     const commentCount = (commentsMap[p.id]||[]).length;
@@ -911,11 +947,11 @@ async function renderGarden(){
 function showPostDetail(postId){
   const p = myPosts.find(x=>x.id===postId);
   if(!p) return;
-  const wokeTime = p.woke_at ? new Date(p.woke_at).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Seoul'}) : '-';
+  const wokeTime = p.woke_at ? kstTimeStr(p.woke_at) : '-';
   let imgsHtml = (p.images&&p.images.length) ? `<div class="post-imgs">${p.images.map(src=>`<img src="${src}">`).join('')}</div>` : `<div class="post-img placeholder">오늘의 세 페이지 ✍️</div>`;
   $('#detailSheet').innerHTML = `
     <h2>${p.day}일차 ${p.mood||''} ${p.is_private?'<span class="badge-private" style="margin-left:6px">🔒 비공개</span>':''}</h2>
-    <p class="sub" style="margin-bottom:12px">기상 ${wokeTime} · ${new Date(p.created_at).toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul'})}</p>
+    <p class="sub" style="margin-bottom:12px">기상 ${wokeTime} · ${kstDateStr(p.created_at)}</p>
     ${imgsHtml}
     <div class="post-body" style="padding:14px 0 0"><div class="post-note">${escapeHtml(p.note||'')}</div></div>
     <button class="ghost" id="closeDetailBtn">닫기</button>
