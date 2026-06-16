@@ -399,18 +399,24 @@ async function setupWakeUI(){
 $('#wakeBtn').onclick = async ()=>{
   if(currentUser.is_admin) return;
   const existing = await getTodayRecord();
-  if(existing) return;
+  // 이미 성공/실패 기록이 있으면 무시, pending이면 타이머만 재시작
+  if(existing && (existing.status==='success' || existing.status==='failed')) return;
+  if(existing && existing.status==='pending'){
+    await setupWakeUI();
+    return;
+  }
 
   $('#wakeBtn').disabled = true;
   try{
     const day = getCurrentDay();
-    const wokeAt = new Date().toISOString();
+    const wokeAt = new Date().toISOString(); // UTC로 저장 (표시는 KST로 변환)
     const { data, error } = await sb.from('daily_records').insert({
-      user_id: currentUser.id, session_id: currentSession.id, day, woke_at: wokeAt, status:'pending', wilting_level:0
+      user_id: currentUser.id, session_id: currentSession.id, day,
+      woke_at: wokeAt, status:'pending', wilting_level:0
     }).select().single();
     if(error) throw error;
     myRecords.push(data);
-    toast('기상 시간이 기록됐어요! 골든타임 시작 ☀️');
+    toast('기상 시간이 기록됐어요! 골든타임 90분 시작 ☀️');
     await setupWakeUI();
   }catch(e){
     console.error(e);
@@ -422,37 +428,49 @@ $('#wakeBtn').onclick = async ()=>{
 function startGoldenTimer(record){
   const wokeAt = new Date(record.woke_at).getTime();
 
-  function tick(){
-    const now = Date.now();
-    const elapsed = Math.floor((now - wokeAt)/1000);
-    const remaining = GOLDEN_SECONDS - elapsed;
+  // woke_at이 24시간보다 오래됐으면 (비정상 기록) auto-fail
+  if(Date.now() - wokeAt > 24*60*60*1000){
+    sb.from('daily_records').update({status:'failed', wilting_level:1}).eq('id', record.id).then(()=>{});
+    $('#wakeCard').style.display='block';
+    $('#wakeBtn').disabled = true;
+    $('#wakeBtn').textContent = '오늘은 인증 실패예요 🌧️';
+    $('#timerWrap').classList.remove('show');
+    return;
+  }
 
-    const pct = Math.min(1, Math.max(0, elapsed/GOLDEN_SECONDS));
-    const circumference = 540; // 2*pi*86
-    const offset = circumference * pct;
-    $('#ringProg').style.strokeDashoffset = offset;
+  function tick(){
+    const elapsed = Math.floor((Date.now() - wokeAt) / 1000);
+    const remaining = GOLDEN_SECONDS - elapsed; // 양수면 남은시간, 음수면 초과
+
+    // 원형 progress bar: 90분 기준 진행률
+    const pct = Math.min(1, Math.max(0, elapsed / GOLDEN_SECONDS));
+    const circumference = 540;
+    $('#ringProg').style.strokeDashoffset = circumference * pct;
 
     let color, msg, msgClass;
-    if(remaining > GOLDEN_SECONDS*0.5){
+    if(remaining > GOLDEN_SECONDS * 0.5){       // 45분 이상 남음
       color='var(--green)'; msgClass='green';
       msg='여유로워요! 천천히 세 장을 채워보세요 🌿';
-    }else if(remaining > GOLDEN_SECONDS*0.15){
+    }else if(remaining > GOLDEN_SECONDS * 0.15){ // 13분 이상 남음
       color='var(--yellow)'; msgClass='yellow';
       msg='시간이 조금씩 줄고 있어요. 마무리를 준비해볼까요? ⏳';
-    }else if(remaining > 0){
+    }else if(remaining > 0){                      // 남은 시간 있음
       color='var(--red)'; msgClass='red';
       msg='골든타임이 곧 끝나요! 지금 인증해주세요 🔥';
-    }else{
+    }else{                                        // 90분 초과
       color='var(--red)'; msgClass='red';
       msg='골든타임이 지났어요. 자정 전까지는 기록을 남겨보세요.';
     }
+
     $('#ringProg').style.stroke = color;
-    $('#timerMsg').className = 'timer-msg '+msgClass;
+    $('#timerMsg').className = 'timer-msg ' + msgClass;
     $('#timerMsg').textContent = msg;
 
+    // 시간 표시: 남은 시간 기준
     const absRem = Math.abs(remaining);
-    const m = String(Math.floor(absRem/60)).padStart(2,'0');
-    const s = String(absRem%60).padStart(2,'0');
+    const m = String(Math.floor(absRem / 60)).padStart(2, '0');
+    const s = String(absRem % 60).padStart(2, '0');
+
     if(remaining >= 0){
       $('#ringTime').textContent = `${m}:${s}`;
       $('#ringTime').classList.remove('late');
