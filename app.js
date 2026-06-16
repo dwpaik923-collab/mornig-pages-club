@@ -973,23 +973,6 @@ async function renderGarden(){
   $('#gardenBar').style.width = Math.min(100, completedCount/TOTAL_DAYS*100)+'%';
   $('#gardenCount').textContent = `${completedCount} / ${TOTAL_DAYS}일 완료`;
 
-  // 통계
-  $('#stStreak').textContent = (currentUser.streak||0)+'일';
-  $('#stTotal').textContent = completedCount+'회';
-
-  // 베스트 타임
-  const successRecs = myRecords.filter(r=>r.status==='success' && r.woke_at);
-  if(successRecs.length){
-    const times = successRecs.map(r => kstTimeStr(r.woke_at)).sort();
-    $('#stBest').textContent = times[0];
-  } else {
-    $('#stBest').textContent = '-';
-  }
-
-  // 패스 카드
-  $('#stPass').textContent = currentUser.pass_used ? '사용함' : '미사용';
-  $('#stPass').style.color = currentUser.pass_used ? 'var(--rose)' : 'var(--sage-deep)';
-
   // 테마 선택 UI
   setupThemeSelectors();
 
