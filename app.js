@@ -1654,16 +1654,18 @@ function scheduleHalfTimeNotif(wokeAt){
   const halfMs = 45 * 60 * 1000;
   const remaining = halfMs - elapsed;
   if(remaining <= 0) return;
-  halfTimeTimer = setTimeout(() => {
-    // 브라우저 Notification
-    if(Notification.permission === 'granted'){
-      new Notification('⏳ 골든타임 절반 남았어요!', {
-        body: '45분이 지났어요. 아직 인증 안 하셨으면 서둘러요! 🔥',
-        icon: 'icon-192.png'
-      });
-    } else {
-      toast('⏳ 골든타임 45분 남았어요! 서둘러 인증해주세요 🔥');
+  halfTimeTimer = setTimeout(async () => {
+    // 웹 푸시 발송 (백그라운드에서도 작동)
+    const { data: { user } } = await supabase.auth.getUser();
+    if(user){
+      fetch('/.netlify/functions/send-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.id })
+      }).catch(() => {});
     }
+    // 앱이 열려있을 때 토스트도 같이 표시
+    toast('⏳ 골든타임 45분 남았어요! 서둘러 인증해주세요 🔥');
   }, remaining);
 }
 
