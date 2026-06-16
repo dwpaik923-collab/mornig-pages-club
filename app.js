@@ -1488,6 +1488,88 @@ function setupThemeSelectors(){
     settingBtn.textContent = isOpen ? '⚙️ 테마 설정' : '✕ 닫기';
   };
 
+  // 알림 진단 버튼
+  const pushDebugBtn = $('#pushDebugBtn');
+  const pushDebugCard = $('#pushDebugCard');
+  const pushDebugLog = $('#pushDebugLog');
+
+  async function runPushDiag(){
+    const lines = [];
+    const log = (s) => { lines.push(s); pushDebugLog.textContent = lines.join('\n'); };
+
+    log('📋 환경 체크...');
+    log('SW 지원: ' + ('serviceWorker' in navigator ? '✅' : '❌'));
+    log('PushManager: ' + ('PushManager' in window ? '✅' : '❌'));
+    log('Notification: ' + ('Notification' in window ? '✅' : '❌'));
+    log('알림 권한: ' + (('Notification' in window) ? Notification.permission : 'N/A'));
+    log('현재 유저: ' + (currentUser ? currentUser.nickname || currentUser.id : '❌ 없음'));
+    log('');
+
+    if(!('serviceWorker' in navigator)){ log('❌ SW 미지원 브라우저'); return; }
+
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      log('등록된 SW: ' + regs.length + '개');
+      regs.forEach((r,i) => log(`  SW[${i}]: ${r.active ? r.active.state : 'inactive'} scope=${r.scope}`));
+    } catch(e){ log('SW 목록 오류: ' + e.message); }
+
+    try {
+      const reg = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('10초 타임아웃')),10000))
+      ]);
+      log('SW ready: ✅');
+
+      const sub = await reg.pushManager.getSubscription();
+      if(sub){
+        log('구독 상태: ✅ 있음');
+        log('endpoint: ' + sub.endpoint.slice(0,60) + '...');
+      } else {
+        log('구독 상태: ❌ 없음 (DB에도 없을 것)');
+      }
+    } catch(e){ log('SW ready 오류: ' + e.message); }
+
+    // DB 구독 확인
+    try {
+      if(currentUser){
+        const { data, error } = await sb.from('push_subscriptions').select('*').eq('user_id', currentUser.id);
+        if(error) log('DB 조회 오류: ' + error.message);
+        else log('DB 구독 수: ' + (data ? data.length : 0) + '개');
+      }
+    } catch(e){ log('DB 오류: ' + e.message); }
+  }
+
+  pushDebugBtn.onclick = async () => {
+    const isOpen = pushDebugCard.style.display !== 'none';
+    pushDebugCard.style.display = isOpen ? 'none' : 'block';
+    pushDebugBtn.textContent = isOpen ? '🔔 알림 진단' : '✕ 닫기';
+    if(!isOpen) await runPushDiag();
+  };
+
+  $('#pushResubBtn').onclick = async () => {
+    pushDebugLog.textContent = '재구독 시도 중...';
+    await requestNotifPermission();
+    await runPushDiag();
+  };
+
+  $('#pushTestBtn').onclick = async () => {
+    if(!currentUser){ pushDebugLog.textContent += '\n❌ 로그인 필요'; return; }
+    pushDebugLog.textContent += '\n📤 테스트 푸시 발송 중...';
+    try {
+      const res = await fetch('/.netlify/functions/send-push', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ user_id: currentUser.id, title: '🧪 테스트 알림', body: '푸시 정상 작동!' })
+      });
+      const json = await res.json();
+      pushDebugLog.textContent += '\n결과: ' + JSON.stringify(json);
+    } catch(e) {
+      pushDebugLog.textContent += '\n❌ 오류: ' + e.message;
+    }
+  };
+
+
+
   $$('#plantThemeRow .theme-btn').forEach(b => {
     if(b.dataset.plant === currentPlantTheme) b.classList.add('active');
     else b.classList.remove('active');

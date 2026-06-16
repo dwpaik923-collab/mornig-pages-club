@@ -451,8 +451,19 @@
     </div>
 
     <!-- 설정 버튼 -->
-    <div style="display:flex;justify-content:flex-end;margin:0 18px 4px">
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin:0 18px 4px">
+      <button class="theme-btn" id="pushDebugBtn" style="font-size:13px">🔔 알림 진단</button>
       <button class="theme-btn" id="gardenSettingBtn" style="font-size:13px">⚙️ 테마 설정</button>
+    </div>
+
+    <!-- 알림 진단 패널 -->
+    <div class="card" id="pushDebugCard" style="display:none;padding:16px 18px;margin:0 18px 8px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">🔔 알림 진단</div>
+      <div id="pushDebugLog" style="font-size:12px;line-height:1.8;color:#555;white-space:pre-wrap;min-height:40px;background:#f5f5f5;padding:10px;border-radius:8px;margin-bottom:10px">진단 중...</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="theme-btn" id="pushResubBtn" style="font-size:12px">🔄 구독 재시도</button>
+        <button class="theme-btn" id="pushTestBtn" style="font-size:12px">📤 테스트 발송</button>
+      </div>
     </div>
 
     <!-- 테마/스킨 (기본 숨김) -->
