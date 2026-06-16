@@ -1689,29 +1689,44 @@ function urlBase64ToUint8Array(base64String) {
 
 async function subscribePush(){
   try {
-    if(!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-    if(Notification.permission !== 'granted') return;
+    if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+      toast('❌ 이 브라우저는 푸시를 지원하지 않아요');
+      return;
+    }
+    if(Notification.permission !== 'granted'){
+      toast('❌ 알림 권한이 없어요: ' + Notification.permission);
+      return;
+    }
 
     const reg = await navigator.serviceWorker.ready;
+    toast('✅ 서비스워커 준비됨');
     let sub = await reg.pushManager.getSubscription();
 
     if(!sub){
+      toast('🔄 새로 구독 중...');
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       });
     }
+    toast('✅ 구독 완료, DB 저장 중...');
 
     // Supabase에 구독 정보 저장
-    if(!currentUser) return;
+    if(!currentUser){
+      toast('❌ currentUser 없음');
+      return;
+    }
 
     const subJson = sub.toJSON();
-    await sb.from('push_subscriptions').upsert({
+    const { error } = await sb.from('push_subscriptions').upsert({
       user_id: currentUser.id,
       endpoint: subJson.endpoint,
       p256dh: subJson.keys.p256dh,
       auth: subJson.keys.auth
     }, { onConflict: 'endpoint' });
+
+    if(error) toast('❌ DB 저장 실패: ' + error.message);
+    else toast('✅ 푸시 구독 저장 완료!');
 
   } catch(e) {
     console.warn('푸시 구독 실패:', e);
