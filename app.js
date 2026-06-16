@@ -1667,11 +1667,54 @@ function scheduleHalfTimeNotif(wokeAt){
   }, remaining);
 }
 
-// 알림 권한 요청 (로그인 후)
+// 알림 권한 요청 + 푸시 구독 (로그인 후)
 async function requestNotifPermission(){
   if(!('Notification' in window)) return;
   if(Notification.permission === 'default'){
     await Notification.requestPermission().catch(()=>{});
+  }
+  await subscribePush();
+}
+
+/* ================== 웹 푸시 구독 ================== */
+const VAPID_PUBLIC_KEY = 'BH16z_ZXOG1Qjl-E-6Z4lPTQdY4jRfJCED4u5eQYMq5b05KY5pMt7OCaZ-Cih27-BVDW8YiUS8ShHhoq8x0qzgQ';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+
+async function subscribePush(){
+  try {
+    if(!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if(Notification.permission !== 'granted') return;
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+
+    if(!sub){
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+
+    // Supabase에 구독 정보 저장
+    const { data: { user } } = await supabase.auth.getUser();
+    if(!user) return;
+
+    const subJson = sub.toJSON();
+    await supabase.from('push_subscriptions').upsert({
+      user_id: user.id,
+      endpoint: subJson.endpoint,
+      p256dh: subJson.keys.p256dh,
+      auth: subJson.keys.auth
+    }, { onConflict: 'endpoint' });
+
+  } catch(e) {
+    console.warn('푸시 구독 실패:', e);
   }
 }
 

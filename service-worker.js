@@ -22,6 +22,23 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+/* ================== 푸시 알림 수신 ================== */
+self.addEventListener('push', (event) => {
+  const data = event.data ? event.data.json() : {};
+  const title = data.title || '⏳ 골든타임 절반 남았어요!';
+  const options = {
+    body: data.body || '45분이 지났어요. 아직 인증 안 하셨으면 서둘러요! 🔥',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(clients.openWindow('./'));
+});
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
