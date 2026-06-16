@@ -250,6 +250,7 @@ async function afterLogin(){
   makeStars();
   updateDayChip();
   setupWakeUI();
+  toast('afterLogin 완료, 알림 요청 시작');
   requestNotifPermission();
 }
 
