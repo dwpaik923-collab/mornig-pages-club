@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gmpc-cache-v1';
+const CACHE_NAME = 'gmpc-cache-v5';
 const ASSETS = [
   './',
   './index.html',
