@@ -1556,7 +1556,7 @@ function setupThemeSelectors(){
     if(!currentUser){ pushDebugLog.textContent += '\n❌ 로그인 필요'; return; }
     pushDebugLog.textContent += '\n📤 테스트 푸시 발송 중...';
     try {
-      const res = await fetch('/.netlify/functions/send-push', {
+      const res = await fetch('https://lztzqqijllczwoojubsf.supabase.co/functions/v1/clever-responder', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ user_id: currentUser.id, title: '🧪 테스트 알림', body: '푸시 정상 작동!' })
