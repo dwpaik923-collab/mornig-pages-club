@@ -250,6 +250,9 @@ async function afterLogin(){
   makeStars();
   updateDayChip();
   setupWakeUI();
+
+  // 로그인/회원가입 직후에도 푸시 구독 시도 (Android PWA 첫 실행 대응)
+  setTimeout(() => requestNotifPermission(), 3000);
 }
 
 async function loadMyData(){
@@ -1671,8 +1674,10 @@ function scheduleHalfTimeNotif(wokeAt){
 async function requestNotifPermission(){
   if(!('Notification' in window)) return;
   if(Notification.permission === 'default'){
-    await Notification.requestPermission().catch(()=>{});
+    const result = await Notification.requestPermission().catch(()=>'denied');
+    if(result !== 'granted') return;
   }
+  if(Notification.permission !== 'granted') return;
   await subscribePush();
 }
 
@@ -1690,8 +1695,12 @@ async function subscribePush(){
   try {
     if(!('serviceWorker' in navigator) || !('PushManager' in window)) return;
     if(Notification.permission !== 'granted') return;
+    if(!currentUser) return;
 
+    // SW가 완전히 activate될 때까지 대기 (Android에서 타이밍 문제 방지)
     const reg = await navigator.serviceWorker.ready;
+
+    // 기존 구독이 있어도 항상 DB에 upsert (유저 변경·재로그인 대응)
     let sub = await reg.pushManager.getSubscription();
 
     if(!sub){
@@ -1701,9 +1710,13 @@ async function subscribePush(){
       });
     }
 
-    if(!currentUser) return;
-
     const subJson = sub.toJSON();
+    if(!subJson.keys || !subJson.keys.p256dh || !subJson.keys.auth){
+      console.warn('푸시 구독 키 누락:', subJson);
+      return;
+    }
+
+    // endpoint 기준 upsert + user_id도 항상 최신으로 갱신
     const { error } = await sb.from('push_subscriptions').upsert({
       user_id: currentUser.id,
       endpoint: subJson.endpoint,
@@ -1712,6 +1725,7 @@ async function subscribePush(){
     }, { onConflict: 'endpoint' });
 
     if(error) console.warn('푸시 DB 저장 실패:', error.message);
+    else console.log('푸시 구독 등록 완료');
 
   } catch(e) {
     console.warn('푸시 구독 실패:', e);
@@ -1780,8 +1794,7 @@ async function init(){
     await renderGarden();
     await renderHomeCards();
     checkPwaPopup();
-    // 푸시 구독 (DOM 완전히 로드된 후)
-    setTimeout(() => requestNotifPermission(), 2000);
+    // 푸시 구독은 afterLogin() 내부에서 처리됨
   }else{
     showScreen('authScreen');
   }
