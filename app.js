@@ -1628,8 +1628,8 @@ function renderMoodChart(){
 
   $('#moodChart').innerHTML = bars.map((b,i) => `
     <div class="mood-bar-col">
-      <div class="mood-bar-spacer" style="flex:${b ? 5 - b.score : 5}"></div>
-      <div class="mood-bar" style="flex:${b ? b.score : 0};background:${b ? MOOD_COLORS[b.score] : 'var(--paper-2)'};opacity:${b?1:0.3}" title="${b?b.mood:''}"></div>
+      <div class="mood-bar-spacer" style="flex:${b ? 5 - b.score : 4}"></div>
+      <div class="mood-bar" style="flex:${b ? b.score : 1};background:${b ? MOOD_COLORS[b.score] : 'var(--paper-2)'};opacity:${b?1:0.25}" title="${b?b.mood:''}"></div>
       <div class="mood-day">${i+1}</div>
     </div>
   `).join('');
