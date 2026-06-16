@@ -1700,20 +1700,40 @@ async function subscribePush(){
     if(Notification.permission !== 'granted'){ toast('❌ [SW] 권한 없음: ' + Notification.permission); return; }
     if(!currentUser){ toast('❌ [SW] currentUser 없음'); return; }
 
-    toast('🔄 [SW] ServiceWorker 대기 중...');
-    const reg = await navigator.serviceWorker.ready;
+    toast('🔄 [SW] ServiceWorker 등록 중...');
+
+    // SW가 아직 등록 안 됐을 수 있으므로 직접 등록 후 ready 대기
+    let reg;
+    try {
+      reg = await navigator.serviceWorker.register('service-worker.js');
+    } catch(e) {
+      // 이미 등록된 경우 getRegistration으로 가져옴
+      reg = await navigator.serviceWorker.getRegistration();
+    }
+    if(!reg){ toast('❌ [SW] SW 등록 실패'); return; }
+
+    // 최대 10초 대기 (ready가 영원히 안 올 수 있으므로 타임아웃 추가)
+    const readyReg = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((_, rej) => setTimeout(() => rej(new Error('SW ready timeout')), 10000))
+    ]);
     toast('✅ [SW] ServiceWorker 준비됨');
 
-    let sub = await reg.pushManager.getSubscription();
-    toast(sub ? '♻️ [SW] 기존 구독 있음' : '🆕 [SW] 새 구독 생성 중...');
-
-    if(!sub){
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-      });
-      toast('✅ [SW] 구독 생성 완료');
+    // 기존 구독 무조건 해제 후 새로 생성 (만료된 구독 재사용 방지)
+    let sub = await readyReg.pushManager.getSubscription();
+    if(sub){
+      toast('🔄 [SW] 기존 구독 해제 후 재생성...');
+      await sub.unsubscribe();
+      // DB에서도 기존 구독 삭제
+      await sb.from('push_subscriptions').delete().eq('user_id', currentUser.id);
     }
+
+    toast('🆕 [SW] 새 구독 생성 중...');
+    sub = await readyReg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    toast('✅ [SW] 구독 생성 완료');
 
     const subJson = sub.toJSON();
     if(!subJson.keys || !subJson.keys.p256dh || !subJson.keys.auth){
@@ -1722,12 +1742,14 @@ async function subscribePush(){
     }
 
     toast('💾 [SW] DB 저장 중...');
-    const { error } = await sb.from('push_subscriptions').upsert({
+    // upsert 대신 delete → insert 방식으로 확실하게 교체
+    await sb.from('push_subscriptions').delete().eq('user_id', currentUser.id);
+    const { error } = await sb.from('push_subscriptions').insert({
       user_id: currentUser.id,
       endpoint: subJson.endpoint,
       p256dh: subJson.keys.p256dh,
       auth: subJson.keys.auth
-    }, { onConflict: 'endpoint' });
+    });
 
     if(error){ toast('❌ [SW] DB 저장 실패: ' + error.message); }
     else { toast('✅ [SW] 푸시 구독 등록 완료!'); }
@@ -1805,11 +1827,9 @@ async function init(){
   }
 }
 
-// PWA: service worker 등록
+// PWA: service worker 등록 (load 이벤트 기다리지 않고 즉시)
 if('serviceWorker' in navigator){
-  window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
-  });
+  navigator.serviceWorker.register('service-worker.js').catch(()=>{});
 }
 
 init();

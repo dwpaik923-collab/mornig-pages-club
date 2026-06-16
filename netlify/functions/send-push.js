@@ -38,15 +38,31 @@ exports.handler = async (event) => {
       body: body || '45분이 지났어요. 아직 인증 안 하셨으면 서둘러요! 🔥'
     });
 
-    // 모든 기기에 푸시 발송
+    // 모든 기기에 푸시 발송 - 만료된 구독은 자동 삭제
+    const expiredEndpoints = [];
     await Promise.all(subs.map(sub =>
       webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
         payload
-      ).catch(e => console.warn('발송 실패:', e.message))
+      ).catch(e => {
+        console.warn('발송 실패:', e.statusCode, e.message);
+        // 410 Gone 또는 404: 구독이 만료됨 → DB에서 삭제
+        if (e.statusCode === 410 || e.statusCode === 404) {
+          expiredEndpoints.push(sub.endpoint);
+        }
+      })
     ));
 
-    return { statusCode: 200, body: JSON.stringify({ message: '푸시 발송 완료' }) };
+    // 만료된 구독 DB에서 정리
+    if (expiredEndpoints.length > 0) {
+      await supabase
+        .from('push_subscriptions')
+        .delete()
+        .in('endpoint', expiredEndpoints);
+      console.log(`만료 구독 ${expiredEndpoints.length}개 삭제됨`);
+    }
+
+    return { statusCode: 200, body: JSON.stringify({ message: '푸시 발송 완료', expired: expiredEndpoints.length }) };
 
   } catch (e) {
     console.error(e);
