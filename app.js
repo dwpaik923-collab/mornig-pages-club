@@ -16,10 +16,12 @@ let currentUser = null;
 let currentSession = null;
 let myRecords = [];     // 내 daily_records (현재 회차)
 let myPosts = [];       // 내 posts (현재 회차)
-let allUsers = [];      // 관리자용
-let allQuotes = [];     // 관리자용
-let commentsMap = {};   // postId -> [comments]
+let allUsers = [];
+let allQuotes = [];
+let commentsMap = {};
 let activeCommentPostId = null;
+let currentPlantTheme = 'default';
+let currentBgTheme = 'dawn';
 let timerInterval = null;
 let pendingImages = []; // base64 array (업로드 대기 이미지)
 let isPrivatePost = false;
@@ -238,11 +240,17 @@ async function afterLogin(){
 
   currentSession = await getActiveSession();
 
+  // 테마 로드
+  currentPlantTheme = currentUser.plant_theme || 'default';
+  currentBgTheme = currentUser.bg_theme || 'dawn';
+  applyBgTheme(currentBgTheme);
+
   await loadMyData();
   setQuote();
   makeStars();
   updateDayChip();
   setupWakeUI();
+  requestNotifPermission();
 }
 
 async function loadMyData(){
@@ -330,6 +338,15 @@ async function setupWakeUI(){
   if(timerInterval) clearInterval(timerInterval);
 
   const record = await getTodayRecord();
+
+  // 패스 카드 버튼: 아직 사용 안 했고 오늘 기록이 없을 때만
+  const passBtn = $('#passBtn');
+  if(!currentUser.pass_used && !record){
+    passBtn.style.display = 'block';
+    passBtn.disabled = false;
+  } else {
+    passBtn.style.display = 'none';
+  }
 
   if(!record){
     // 아직 기상 안 함
@@ -495,6 +512,7 @@ function startGoldenTimer(record){
   }
   tick();
   timerInterval = setInterval(tick, 1000);
+  scheduleHalfTimeNotif(record.woke_at);
 }
 
 /* ================== 인증(verify) 시트 ================== */
@@ -846,16 +864,24 @@ $('#commentSubmitBtn').onclick = async ()=>{
 
 /* ================== 정원 ================== */
 // 식물 SVG: 0(씨앗)~20(꽃) 21단계, wilting(0~3)에 따라 색이 칙칙해짐
-function plantSVG(stage, wilting){
+function plantSVG(stage, wilting, theme){
   stage = Math.max(0, Math.min(PLANT_STAGE_COUNT-1, stage));
-  // 시들기 정도에 따라 색 보정
-  const wiltColors = [
-    {leaf:'#8ba888', leaf2:'#9bb896', trunk:'#6d5235'},
-    {leaf:'#a3ab8a', leaf2:'#b0b394', trunk:'#7a6347'},
-    {leaf:'#bdb088', leaf2:'#c4ba98', trunk:'#8a7252'},
-    {leaf:'#cdb98a', leaf2:'#d4c79e', trunk:'#9a805c'}
-  ];
-  const c = wiltColors[Math.min(3, wilting||0)];
+  theme = theme || 'default';
+
+  // 시들기 + 테마 색상
+  const base = PLANT_PALETTES[theme] || PLANT_PALETTES.default;
+  const wiltFactor = (wilting||0) / 3; // 0~1
+  function wiltColor(hex){
+    // 시들수록 채도 낮추고 밝기 높임
+    return wiltFactor > 0 ? `color-mix(in srgb, ${hex}, #c8b89a ${Math.round(wiltFactor*50)}%)` : hex;
+  }
+  const c = {
+    leaf:   wiltColor(base.leaf),
+    leaf2:  wiltColor(base.leaf2),
+    trunk:  base.trunk,
+    flower: wiltColor(base.flower),
+    center: wiltColor(base.center),
+  };
 
   const pot=`<rect x="62" y="170" width="76" height="42" rx="6" fill="#c98a63"/><rect x="58" y="164" width="84" height="14" rx="5" fill="#d99a73"/>`;
   const soil=`<ellipse cx="100" cy="205" rx="74" ry="14" fill="#9a7b5a"/><ellipse cx="100" cy="201" rx="74" ry="12" fill="#b08e68"/>`;
@@ -899,8 +925,8 @@ function plantSVG(stage, wilting){
       <circle cx="60" cy="114" r="32" fill="${c.leaf}"/>
       <circle cx="140" cy="114" r="32" fill="${c.leaf2}"/>
       <circle cx="100" cy="116" r="38" fill="${c.leaf2}"/>
-      ${[...Array(7)].map((_,k)=>{const a=k/7*6.28;return `<circle cx="${100+Math.cos(a)*42}" cy="${100+Math.sin(a)*36}" r="6" fill="${wilting>0?'#d9b98c':'#f6b083'}"/>`}).join('')}
-      <circle cx="100" cy="100" r="9" fill="${wilting>0?'#e8d4a8':'#ffce7a'}"/>`;
+      ${[...Array(7)].map((_,k)=>{const a=k/7*6.28;return `<circle cx="${100+Math.cos(a)*42}" cy="${100+Math.sin(a)*36}" r="6" fill="${c.flower}"/>`}).join('')}
+      <circle cx="100" cy="100" r="9" fill="${c.center}"/>`;
   }
   return `<svg width="200" height="220" viewBox="0 0 200 220">${pot}${soil}${plant}</svg>`;
 }
@@ -930,30 +956,50 @@ const STAGE_INFO = [
 ];
 
 async function renderGarden(){
-  // 가장 최근 record 기준으로 stage/시들기 계산
   const day = getCurrentDay();
-  const completedCount = myRecords.filter(r=>r.status==='success').length;
-  const failedToday = myRecords.find(r=>r.day===day && r.status==='failed');
+  const completedCount = myRecords.filter(r=>r.status==='success'||r.status==='passed').length;
+  const lastRecord = [...myRecords].reverse().find(r=>r.day <= day);
+  let wilting = 0;
+  if(lastRecord && lastRecord.status === 'failed') wilting = lastRecord.wilting_level || 1;
 
-  // stage: 진행한 일수를 기준 (0~20)
   let stage = Math.min(PLANT_STAGE_COUNT-1, completedCount);
 
-  // wilting: 최근 record의 wilting_level 중 최대값(오늘 기준)
-  let wilting = 0;
-  const lastRecord = myRecords[myRecords.length-1];
-  if(lastRecord) wilting = lastRecord.wilting_level || 0;
-
-  $('#plantStage').innerHTML = plantSVG(stage, wilting);
+  $('#plantStage').innerHTML = plantSVG(stage, wilting, currentPlantTheme);
 
   const info = STAGE_INFO[stage];
   $('#stageName').textContent = wilting>0 ? `${info[0]} (조금 시들었어요)` : info[0];
-  $('#stageSub').textContent = wilting>0 ? '오늘 다시 인증하면 다시 생기를 찾아요 🌱' : info[1];
+  $('#stageSub').textContent = wilting>0 ? '오늘 인증하면 다시 생기를 찾아요 🌱' : info[1];
   $('#gardenBar').style.width = Math.min(100, completedCount/TOTAL_DAYS*100)+'%';
   $('#gardenCount').textContent = `${completedCount} / ${TOTAL_DAYS}일 완료`;
 
-  // streak
+  // 통계
   $('#stStreak').textContent = (currentUser.streak||0)+'일';
   $('#stTotal').textContent = completedCount+'회';
+
+  // 베스트 타임
+  const successRecs = myRecords.filter(r=>r.status==='success' && r.woke_at);
+  if(successRecs.length){
+    const times = successRecs.map(r => kstTimeStr(r.woke_at)).sort();
+    $('#stBest').textContent = times[0];
+  } else {
+    $('#stBest').textContent = '-';
+  }
+
+  // 패스 카드
+  $('#stPass').textContent = currentUser.pass_used ? '사용함' : '미사용';
+  $('#stPass').style.color = currentUser.pass_used ? 'var(--rose)' : 'var(--sage-deep)';
+
+  // 테마 선택 UI
+  setupThemeSelectors();
+
+  // 감정 차트
+  renderMoodChart();
+
+  // 키워드 클라우드
+  renderKeywordCloud();
+
+  // 완주 증명서
+  await renderCertificate();
 
   // 내 피드 3x3
   if(!myPosts.length){
@@ -1004,6 +1050,8 @@ async function renderDash(){
   $('#dashFrac').textContent = `${done}/${total}`;
   const off = total>0 ? 251-(done/total)*251 : 251;
   $('#ringProg2').style.strokeDashoffset = off;
+
+  await checkPerfectDay(list, successIds);
 
   $('#gardenGrid').innerHTML = list.map(u=>{
     const isDone = successIds.has(u.id);
@@ -1313,6 +1361,249 @@ async function checkFailures(){
     }
   }
   myRecords.sort((a,b)=>a.day-b.day);
+}
+
+/* ================== 패스 카드 ================== */
+$('#passBtn').onclick = async () => {
+  if(currentUser.pass_used){ toast('패스 카드는 이미 사용했어요.'); return; }
+  if(!confirm('패스 카드를 사용할까요? 21일 중 딱 1번만 쓸 수 있어요.')) return;
+
+  $('#passBtn').disabled = true;
+  try{
+    const day = getCurrentDay();
+    const { data: rec, error: recErr } = await sb.from('daily_records').insert({
+      user_id: currentUser.id, session_id: currentSession.id, day,
+      woke_at: new Date().toISOString(), status:'passed', wilting_level:0
+    }).select().single();
+    if(recErr) throw recErr;
+
+    const { data: updUser, error: userErr } = await sb.from('users')
+      .update({ pass_used: true, updated_at: new Date().toISOString() })
+      .eq('id', currentUser.id).select().single();
+    if(userErr) throw userErr;
+
+    currentUser = updUser;
+    myRecords.push(rec);
+    $('#passOverlay').classList.add('show');
+    await setupWakeUI();
+  } catch(e){
+    console.error(e);
+    toast('오류가 발생했어요. 다시 시도해주세요.');
+    $('#passBtn').disabled = false;
+  }
+};
+
+$('#passCloseBtn').onclick = () => $('#passOverlay').classList.remove('show');
+
+/* ================== 배경 스킨 ================== */
+const BG_THEMES = {
+  dawn:   'linear-gradient(180deg,#1b1f3b 0%,#3d3a6b 38%,#e98a7d 74%,#f6b083 100%)',
+  winter: 'linear-gradient(180deg,#0d1b2a 0%,#1e3a5f 38%,#a8c4dc 74%,#dce8f0 100%)',
+  summer: 'linear-gradient(180deg,#2d1b4e 0%,#8b3a8f 38%,#e8834a 74%,#f5c842 100%)',
+  rainy:  'linear-gradient(180deg,#1a1a2e 0%,#2d3561 38%,#6b7a8d 74%,#a4b0be 100%)',
+};
+function applyBgTheme(theme){
+  const sky = $('#sky');
+  if(sky) sky.style.background = BG_THEMES[theme] || BG_THEMES.dawn;
+}
+
+/* ================== 식물 테마별 색상 ================== */
+const PLANT_PALETTES = {
+  default: { leaf:'#8ba888', leaf2:'#9bb896', trunk:'#6d5235', flower:'#f6b083', center:'#ffce7a' },
+  cactus:  { leaf:'#4a9e6b', leaf2:'#5bb87e', trunk:'#3a7a52', flower:'#f7c59f', center:'#f4a261' },
+  bamboo:  { leaf:'#7db87a', leaf2:'#6aa567', trunk:'#5c8a3a', flower:'#c8e6c9', center:'#a5d6a7' },
+  cherry:  { leaf:'#f4a7b9', leaf2:'#f8c8d4', trunk:'#8b5e3c', flower:'#ff80ab', center:'#fce4ec' },
+};
+
+/* ================== 테마 선택 UI ================== */
+function setupThemeSelectors(){
+  $$('#plantThemeRow .theme-btn').forEach(b => {
+    if(b.dataset.plant === currentPlantTheme) b.classList.add('active');
+    else b.classList.remove('active');
+    b.onclick = async () => {
+      currentPlantTheme = b.dataset.plant;
+      $$('#plantThemeRow .theme-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      await sb.from('users').update({ plant_theme: currentPlantTheme }).eq('id', currentUser.id);
+      currentUser.plant_theme = currentPlantTheme;
+      renderGarden();
+    };
+  });
+  $$('#bgThemeRow .theme-btn').forEach(b => {
+    if(b.dataset.bg === currentBgTheme) b.classList.add('active');
+    else b.classList.remove('active');
+    b.onclick = async () => {
+      currentBgTheme = b.dataset.bg;
+      $$('#bgThemeRow .theme-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      applyBgTheme(currentBgTheme);
+      await sb.from('users').update({ bg_theme: currentBgTheme }).eq('id', currentUser.id);
+      currentUser.bg_theme = currentBgTheme;
+    };
+  });
+}
+
+/* ================== 감정 차트 ================== */
+function renderMoodChart(){
+  const MOOD_SCORES = {'🌞':5,'🙂':4,'😐':3,'😮‍💨':2,'🌧️':1};
+  const MOOD_COLORS = {5:'#ffce7a',4:'#8ba888',3:'#a0a0c0',2:'#e9b97d',1:'#e98a7d'};
+
+  // 21일 배열 초기화
+  const bars = Array(21).fill(null);
+  myRecords.forEach(r => {
+    if(r.day >= 1 && r.day <= 21 && r.mood){
+      bars[r.day-1] = { score: MOOD_SCORES[r.mood] || 3, mood: r.mood };
+    }
+  });
+
+  if(bars.every(b => b===null)){
+    $('#moodChart').innerHTML = '<div style="color:var(--ink-soft);font-size:13px;padding:20px 0;text-align:center">아직 기록된 컨디션이 없어요</div>';
+    return;
+  }
+
+  $('#moodChart').innerHTML = bars.map((b,i) => `
+    <div class="mood-bar-col">
+      <div class="mood-bar" style="height:${b ? b.score/5*100 : 0}%;background:${b ? MOOD_COLORS[b.score] : 'var(--paper-2)'};opacity:${b?1:0.3}" title="${b?b.mood:''}"></div>
+      <div class="mood-day">${i+1}</div>
+    </div>
+  `).join('');
+}
+
+/* ================== 키워드 클라우드 ================== */
+const KO_STOP_WORDS = new Set(['이','가','을','를','은','는','의','에','도','와','과','로','으로','에서','이다','있다','하다','이고','이며','그','또','더','그리고','하지만','그런데','그래서','아','어','오','우','이제','그냥','진짜','정말','너무','조금','많이','있어','없어','했다','했어','했는데','것','수','한','안','못','안되','그게','이게','이번','오늘','아침']);
+
+function renderKeywordCloud(){
+  const text = myPosts.map(p => p.note || '').join(' ');
+  if(!text.trim()){ $('#cloud').innerHTML = '<span style="color:var(--ink-soft);font-size:13px">아직 소감 글이 없어요</span>'; return; }
+
+  const words = text.split(/[\s,.!?·\n""'']+/).filter(w => w.length > 1 && !KO_STOP_WORDS.has(w));
+  const freq = {};
+  words.forEach(w => freq[w] = (freq[w]||0)+1);
+
+  const sorted = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,20);
+  if(!sorted.length){ $('#cloud').innerHTML = '<span style="color:var(--ink-soft);font-size:13px">아직 소감 글이 없어요</span>'; return; }
+
+  const max = sorted[0][1];
+  $('#cloud').innerHTML = sorted.map(([w,c]) =>
+    `<span style="font-size:${13 + Math.round((c/max)*18)}px;opacity:${0.5 + (c/max)*0.5}">${escapeHtml(w)}</span>`
+  ).join('');
+}
+
+/* ================== 완주 증명서 ================== */
+async function renderCertificate(){
+  const completedCount = myRecords.filter(r=>r.status==='success'||r.status==='passed').length;
+  if(completedCount < TOTAL_DAYS){ $('#certCard').style.display='none'; return; }
+
+  $('#certCard').style.display='block';
+  const canvas = $('#certCanvas');
+  const W = 540, H = 960;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // 배경
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#1b1f3b');
+  grad.addColorStop(0.4,'#3d3a6b');
+  grad.addColorStop(0.75,'#e98a7d');
+  grad.addColorStop(1,'#f6b083');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,W,H);
+
+  // 별
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  for(let i=0;i<30;i++){
+    ctx.beginPath();
+    ctx.arc(Math.random()*W, Math.random()*H*0.5, Math.random()*2+0.5, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // 나무 SVG → 이미지로 변환
+  const svgStr = plantSVG(20, 0);
+  const svgBlob = new Blob([svgStr], {type:'image/svg+xml'});
+  const svgUrl = URL.createObjectURL(svgBlob);
+  await new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, W/2-160, 250, 320, 352);
+      URL.revokeObjectURL(svgUrl);
+      resolve();
+    };
+    img.onerror = resolve;
+    img.src = svgUrl;
+  });
+
+  // 텍스트
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.font = 'bold 22px sans-serif';
+  ctx.fillText('GOOD MORNING PAGE CLUB', W/2, 80);
+
+  ctx.font = 'bold 42px serif';
+  ctx.fillStyle = '#ffce7a';
+  ctx.fillText('21일 완주 🏆', W/2, 640);
+
+  ctx.font = 'bold 32px sans-serif';
+  ctx.fillStyle = '#fff';
+  ctx.fillText(currentUser.nickname, W/2, 700);
+
+  ctx.font = '18px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  const start = currentSession?.start_date || '';
+  const end = currentSession?.end_date || '';
+  ctx.fillText(`${start} ~ ${end}`, W/2, 740);
+
+  ctx.font = '16px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.fillText('매일 아침 세 장, 스스로와의 약속을 지켰습니다.', W/2, 790);
+
+  // 하단 워터마크
+  ctx.font = '14px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillText('morningpageclub.netlify.app', W/2, 900);
+
+  $('#certDownloadBtn').onclick = () => {
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = `GMPC_완주증명서_${currentUser.nickname}.png`;
+    a.click();
+  };
+}
+
+/* ================== 퍼펙트 데이 ================== */
+async function checkPerfectDay(users, successIds){
+  const total = users.filter(u=>!u.is_admin).length;
+  if(total === 0){ $('#perfectDayBanner').style.display='none'; return; }
+  const isPerfect = successIds.size === total;
+  $('#perfectDayBanner').style.display = isPerfect ? 'block' : 'none';
+}
+
+/* ================== 골든타임 45분 알림 ================== */
+let halfTimeTimer = null;
+function scheduleHalfTimeNotif(wokeAt){
+  if(halfTimeTimer) clearTimeout(halfTimeTimer);
+  const elapsed = Date.now() - parseUTC(wokeAt).getTime();
+  const halfMs = 45 * 60 * 1000;
+  const remaining = halfMs - elapsed;
+  if(remaining <= 0) return;
+  halfTimeTimer = setTimeout(() => {
+    // 브라우저 Notification
+    if(Notification.permission === 'granted'){
+      new Notification('⏳ 골든타임 절반 남았어요!', {
+        body: '45분이 지났어요. 아직 인증 안 하셨으면 서둘러요! 🔥',
+        icon: 'icon-192.png'
+      });
+    } else {
+      toast('⏳ 골든타임 45분 남았어요! 서둘러 인증해주세요 🔥');
+    }
+  }, remaining);
+}
+
+// 알림 권한 요청 (로그인 후)
+async function requestNotifPermission(){
+  if(!('Notification' in window)) return;
+  if(Notification.permission === 'default'){
+    await Notification.requestPermission().catch(()=>{});
+  }
 }
 
 /* ================== PWA 설치 안내 팝업 ================== */

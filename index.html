@@ -180,6 +180,37 @@
   .badge-private{font-size:11px;background:var(--paper-2);color:var(--ink-soft);padding:2px 8px;border-radius:10px;font-weight:500;}
   .empty{text-align:center;color:var(--ink-soft);font-size:14px;padding:60px 30px;}
 
+  /* pass button */
+  .pass-btn{
+    width:100%;border:1.5px dashed var(--sage);background:rgba(139,168,136,.08);
+    color:var(--sage-deep);font-family:'Noto Sans KR';font-weight:600;font-size:14px;
+    padding:12px;border-radius:14px;margin-top:10px;cursor:pointer;transition:.15s;
+  }
+  .pass-btn:active{transform:scale(.97);}
+  .pass-btn:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* theme selector */
+  .theme-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .theme-btn{
+    border:1.5px solid var(--line);background:#fff;border-radius:20px;
+    padding:7px 14px;font-size:13px;cursor:pointer;font-family:'Noto Sans KR';
+    color:var(--ink-soft);transition:.15s;
+  }
+  .theme-btn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+
+  /* mood chart */
+  .mood-chart-wrap{display:flex;align-items:flex-end;gap:4px;height:80px;margin-top:14px;overflow-x:auto;padding-bottom:2px;}
+  .mood-bar-col{display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;min-width:24px;}
+  .mood-bar{width:100%;border-radius:4px 4px 0 0;min-height:4px;transition:height .5s;}
+  .mood-day{font-size:9px;color:var(--ink-soft);}
+
+  /* cloud */
+  .cloud{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:14px;align-items:baseline;min-height:40px;}
+  .cloud span{color:var(--sage-deep);font-weight:500;line-height:1;cursor:default;}
+
+  /* report grid 4칸 */
+  .report-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 18px;}
+
   /* comments */
   .comment-row{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--paper-2);}
   .comment-row:last-child{border-bottom:none;}
@@ -343,6 +374,7 @@
       <h2>아침을 열어볼까요?</h2>
       <p class="sub">일어나자마자 버튼을 누르면 골든타임 90분이 시작돼요. 그 안에 모닝페이지를 쓰고 인증하면 성공! 자정까지 기상 버튼을 누르지 않으면 그날은 자동으로 인증 실패 처리돼요.</p>
       <button class="wake-btn" id="wakeBtn">☀️ 방금 일어났어요</button>
+      <button class="pass-btn" id="passBtn" style="display:none">🛡️ 오늘은 패스할게요 <span style="font-size:12px;opacity:.7">(1회 한정)</span></button>
     </div>
 
     <div class="timer-wrap" id="timerWrap">
@@ -376,7 +408,7 @@
       <h1>나의 정원</h1>
       <p>하루하루가 한 뼘씩 자라나요</p>
     </div>
-    <div class="garden-hero">
+    <div class="garden-hero" id="gardenHero">
       <div class="plant-stage" id="plantStage"></div>
       <div class="garden-cap">
         <div class="stagename" id="stageName">씨앗</div>
@@ -386,11 +418,55 @@
       </div>
     </div>
 
-    <div class="report-grid">
-      <div class="stat"><div class="n" id="stStreak">0</div><div class="l">연속 기록</div></div>
-      <div class="stat"><div class="n" id="stTotal">0</div><div class="l">전체 인증</div></div>
+    <!-- 테마 선택 -->
+    <div class="card" style="padding:16px 18px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">🌿 식물 테마</div>
+      <div class="theme-row" id="plantThemeRow">
+        <button class="theme-btn active" data-plant="default">🌳 나무</button>
+        <button class="theme-btn" data-plant="cactus">🌵 선인장</button>
+        <button class="theme-btn" data-plant="bamboo">🎋 대나무</button>
+        <button class="theme-btn" data-plant="cherry">🌸 벚꽃</button>
+      </div>
+      <div style="font-size:13px;font-weight:700;margin:14px 0 10px">🌅 배경 스킨</div>
+      <div class="theme-row" id="bgThemeRow">
+        <button class="theme-btn active" data-bg="dawn">새벽</button>
+        <button class="theme-btn" data-bg="winter">겨울 새벽</button>
+        <button class="theme-btn" data-bg="summer">여름 새벽</button>
+        <button class="theme-btn" data-bg="rainy">비 오는 새벽</button>
+      </div>
     </div>
 
+    <!-- 통계 -->
+    <div class="report-grid">
+      <div class="stat"><div class="n" id="stStreak">0일</div><div class="l">연속 기록</div></div>
+      <div class="stat"><div class="n" id="stTotal">0회</div><div class="l">전체 인증</div></div>
+      <div class="stat"><div class="n" id="stBest">-</div><div class="l">최단 기상</div></div>
+      <div class="stat"><div class="n" id="stPass">미사용</div><div class="l">패스 카드</div></div>
+    </div>
+
+    <!-- 감정 변화 차트 -->
+    <div class="card">
+      <h2>마음 날씨</h2>
+      <p class="sub">21일 동안의 컨디션 흐름이에요</p>
+      <div class="mood-chart-wrap" id="moodChart"></div>
+    </div>
+
+    <!-- 키워드 클라우드 -->
+    <div class="card">
+      <h2>내 21일의 핵심 단어</h2>
+      <p class="sub">소감 글에서 자주 등장한 단어예요</p>
+      <div class="cloud" id="cloud"></div>
+    </div>
+
+    <!-- 완주 증명서 -->
+    <div class="card" id="certCard" style="display:none">
+      <h2>🏆 21일 완주 증명서</h2>
+      <p class="sub">대단해요! 끝까지 해내셨군요.</p>
+      <canvas id="certCanvas" style="width:100%;border-radius:14px;margin-top:14px"></canvas>
+      <button class="primary" id="certDownloadBtn" style="margin-top:12px">⬇️ 이미지로 저장하기</button>
+    </div>
+
+    <!-- 내 피드 -->
     <div class="pagehead" style="padding-top:6px"><h1 style="font-size:18px">내 피드</h1><p>탭하면 자세히 볼 수 있어요</p></div>
     <div class="grid3" id="myGrid"></div>
   </section>
@@ -400,6 +476,11 @@
     <div class="pagehead">
       <h1>우리들의 현황</h1>
       <p>혼자가 아니라 같이 가고 있어요</p>
+    </div>
+    <div id="perfectDayBanner" style="display:none;margin:0 18px 0;background:linear-gradient(120deg,#f6b083,#ffce7a);border-radius:18px;padding:16px 20px;box-shadow:var(--shadow);margin-bottom:0">
+      <div style="font-size:22px;margin-bottom:4px">🏆 퍼펙트 데이!</div>
+      <div style="font-weight:700;font-size:15px">오늘 모든 멤버가 인증을 완료했어요!</div>
+      <div style="font-size:13px;margin-top:4px;opacity:.8">함께라서 가능했어요. 내일도 같이 해요 🌱</div>
     </div>
     <div class="bigstat">
       <div class="ring">
@@ -413,13 +494,11 @@
         </div>
       </div>
     </div>
-
     <div class="everyone">
       <h2>오늘 모두의 정원</h2>
       <p class="sub">초록 카드는 오늘 인증을 마친 멤버예요</p>
       <div class="garden-grid" id="gardenGrid"></div>
     </div>
-
     <div style="margin:18px;">
       <button class="primary" id="shareBtn">🔗 우리 정원 공유하기</button>
     </div>
@@ -546,34 +625,14 @@
     </div>
   </div>
 
-  <!-- PWA 설치 안내 팝업 -->
-  <div class="overlay center" id="pwaOverlay">
-    <div class="sheet" style="text-align:center">
-      <div style="font-size:48px;margin-bottom:8px">📲</div>
-      <h2 style="justify-content:center;display:flex">앱으로 설치하기</h2>
-      <p style="color:var(--ink-soft);font-size:13px;margin-bottom:20px;line-height:1.7">홈 화면에 추가하면 앱처럼 바로 열 수 있어요.<br>주소창 없이 깔끔하게 실행돼요!</p>
-
-      <div style="background:var(--paper-2);border-radius:16px;padding:16px;margin-bottom:12px;text-align:left">
-        <div style="font-weight:700;font-size:14px;margin-bottom:10px">🍎 아이폰 (Safari)</div>
-        <div style="font-size:13px;color:var(--ink-soft);line-height:2">
-          1. <b>Safari</b>로 이 페이지를 열어주세요<br>
-          2. 하단 <b>공유 버튼(⬆️)</b>을 눌러요<br>
-          3. <b>"홈 화면에 추가"</b>를 선택해요<br>
-          4. 오른쪽 위 <b>"추가"</b>를 누르면 완료!
-        </div>
-      </div>
-
-      <div style="background:var(--paper-2);border-radius:16px;padding:16px;margin-bottom:20px;text-align:left">
-        <div style="font-weight:700;font-size:14px;margin-bottom:10px">🤖 안드로이드 (Chrome)</div>
-        <div style="font-size:13px;color:var(--ink-soft);line-height:2">
-          1. <b>Chrome</b>으로 이 페이지를 열어주세요<br>
-          2. 주소창 오른쪽 <b>⋮ 메뉴</b>를 눌러요<br>
-          3. <b>"홈 화면에 추가"</b>를 선택해요<br>
-          4. <b>"추가"</b>를 누르면 완료!
-        </div>
-      </div>
-
-      <button class="primary" id="pwaCloseBtn">확인했어요</button>
+  <!-- pass 격려 팝업 -->
+  <div class="overlay center" id="passOverlay">
+    <div class="sheet celebrate-sheet">
+      <div class="celebrate-emoji">🛡️</div>
+      <h2>패스 카드 사용!</h2>
+      <div class="streak-badge">연속 기록이 유지돼요</div>
+      <div class="celebrate-msg">오늘 하루는 쉬어가도 괜찮아요.<br>하지만 <b>내일은 꼭 함께해요!</b> 💪<br>작은 쉼 뒤에 더 단단해진 내가 기다리고 있어요.</div>
+      <button class="primary" id="passCloseBtn">고마워요, 내일 또 올게요!</button>
     </div>
   </div>
 
