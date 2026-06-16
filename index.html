@@ -418,21 +418,24 @@
       </div>
     </div>
 
-    <!-- 테마 선택 -->
-    <div class="card" style="padding:16px 18px">
+    <!-- 설정 버튼 -->
+    <div style="display:flex;justify-content:flex-end;margin:0 18px 4px">
+      <button class="theme-btn" id="gardenSettingBtn" style="font-size:13px">⚙️ 테마 설정</button>
+    </div>
+
+    <!-- 테마/스킨 (기본 숨김) -->
+    <div class="card" id="gardenThemeCard" style="display:none;padding:16px 18px">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px">🌿 식물 테마</div>
       <div class="theme-row" id="plantThemeRow">
-        <button class="theme-btn active" data-plant="default">🌳 나무</button>
+        <button class="theme-btn" data-plant="default">🌳 나무</button>
         <button class="theme-btn" data-plant="cactus">🌵 선인장</button>
         <button class="theme-btn" data-plant="bamboo">🎋 대나무</button>
         <button class="theme-btn" data-plant="cherry">🌸 벚꽃</button>
       </div>
       <div style="font-size:13px;font-weight:700;margin:14px 0 10px">🌅 배경 스킨</div>
       <div class="theme-row" id="bgThemeRow">
-        <button class="theme-btn active" data-bg="dawn">새벽</button>
-        <button class="theme-btn" data-bg="winter">겨울 새벽</button>
-        <button class="theme-btn" data-bg="summer">여름 새벽</button>
-        <button class="theme-btn" data-bg="rainy">비 오는 새벽</button>
+        <button class="theme-btn" data-bg="dawn">🌅 새벽</button>
+        <button class="theme-btn" data-bg="winter">❄️ 겨울 새벽</button>
       </div>
     </div>
 
@@ -449,13 +452,6 @@
       <h2>마음 날씨</h2>
       <p class="sub">21일 동안의 컨디션 흐름이에요</p>
       <div class="mood-chart-wrap" id="moodChart"></div>
-    </div>
-
-    <!-- 키워드 클라우드 -->
-    <div class="card">
-      <h2>내 21일의 핵심 단어</h2>
-      <p class="sub">소감 글에서 자주 등장한 단어예요</p>
-      <div class="cloud" id="cloud"></div>
     </div>
 
     <!-- 완주 증명서 -->

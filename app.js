@@ -995,9 +995,6 @@ async function renderGarden(){
   // 감정 차트
   renderMoodChart();
 
-  // 키워드 클라우드
-  renderKeywordCloud();
-
   // 완주 증명서
   await renderCertificate();
 
@@ -1399,8 +1396,6 @@ $('#passCloseBtn').onclick = () => $('#passOverlay').classList.remove('show');
 const BG_THEMES = {
   dawn:   'linear-gradient(180deg,#1b1f3b 0%,#3d3a6b 38%,#e98a7d 74%,#f6b083 100%)',
   winter: 'linear-gradient(180deg,#0d1b2a 0%,#1e3a5f 38%,#a8c4dc 74%,#dce8f0 100%)',
-  summer: 'linear-gradient(180deg,#2d1b4e 0%,#8b3a8f 38%,#e8834a 74%,#f5c842 100%)',
-  rainy:  'linear-gradient(180deg,#1a1a2e 0%,#2d3561 38%,#6b7a8d 74%,#a4b0be 100%)',
 };
 function applyBgTheme(theme){
   const sky = $('#sky');
@@ -1417,6 +1412,15 @@ const PLANT_PALETTES = {
 
 /* ================== 테마 선택 UI ================== */
 function setupThemeSelectors(){
+  // 설정 버튼 토글
+  const settingBtn = $('#gardenSettingBtn');
+  const themeCard = $('#gardenThemeCard');
+  settingBtn.onclick = () => {
+    const isOpen = themeCard.style.display !== 'none';
+    themeCard.style.display = isOpen ? 'none' : 'block';
+    settingBtn.textContent = isOpen ? '⚙️ 테마 설정' : '✕ 닫기';
+  };
+
   $$('#plantThemeRow .theme-btn').forEach(b => {
     if(b.dataset.plant === currentPlantTheme) b.classList.add('active');
     else b.classList.remove('active');
