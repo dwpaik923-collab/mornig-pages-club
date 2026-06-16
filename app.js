@@ -1768,15 +1768,12 @@ function scheduleHalfTimeNotif(wokeAt){
 
 // 알림 권한 요청 + 푸시 구독 (로그인 후)
 async function requestNotifPermission(){
-  toast('🔔 [1] 알림 초기화 중...');
-  if(!('Notification' in window)){ toast('❌ [1] Notification 미지원'); return; }
-  toast('🔔 [2] 현재 권한: ' + Notification.permission);
+  if(!('Notification' in window)) return;
   if(Notification.permission === 'default'){
     const result = await Notification.requestPermission().catch(()=>'denied');
-    toast('🔔 [3] 권한 요청 결과: ' + result);
     if(result !== 'granted') return;
   }
-  if(Notification.permission !== 'granted'){ toast('❌ [3] 권한 없음: ' + Notification.permission); return; }
+  if(Notification.permission !== 'granted') return;
   await subscribePush();
 }
 
@@ -1792,66 +1789,47 @@ function urlBase64ToUint8Array(base64String) {
 
 async function subscribePush(){
   try {
-    if(!('serviceWorker' in navigator) || !('PushManager' in window)){ toast('❌ [SW] ServiceWorker/PushManager 미지원'); return; }
-    if(Notification.permission !== 'granted'){ toast('❌ [SW] 권한 없음: ' + Notification.permission); return; }
-    if(!currentUser){ toast('❌ [SW] currentUser 없음'); return; }
+    if(!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if(Notification.permission !== 'granted') return;
+    if(!currentUser) return;
 
-    toast('🔄 [SW] ServiceWorker 등록 중...');
-
-    // SW가 아직 등록 안 됐을 수 있으므로 직접 등록 후 ready 대기
     let reg;
     try {
       reg = await navigator.serviceWorker.register('service-worker.js');
     } catch(e) {
-      // 이미 등록된 경우 getRegistration으로 가져옴
       reg = await navigator.serviceWorker.getRegistration();
     }
-    if(!reg){ toast('❌ [SW] SW 등록 실패'); return; }
+    if(!reg) return;
 
-    // 최대 10초 대기 (ready가 영원히 안 올 수 있으므로 타임아웃 추가)
     const readyReg = await Promise.race([
       navigator.serviceWorker.ready,
       new Promise((_, rej) => setTimeout(() => rej(new Error('SW ready timeout')), 10000))
     ]);
-    toast('✅ [SW] ServiceWorker 준비됨');
 
-    // 기존 구독 무조건 해제 후 새로 생성 (만료된 구독 재사용 방지)
     let sub = await readyReg.pushManager.getSubscription();
     if(sub){
-      toast('🔄 [SW] 기존 구독 해제 후 재생성...');
       await sub.unsubscribe();
-      // DB에서도 기존 구독 삭제
       await sb.from('push_subscriptions').delete().eq('user_id', currentUser.id);
     }
 
-    toast('🆕 [SW] 새 구독 생성 중...');
     sub = await readyReg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
     });
-    toast('✅ [SW] 구독 생성 완료');
 
     const subJson = sub.toJSON();
-    if(!subJson.keys || !subJson.keys.p256dh || !subJson.keys.auth){
-      toast('❌ [SW] 구독 키 누락');
-      return;
-    }
+    if(!subJson.keys || !subJson.keys.p256dh || !subJson.keys.auth) return;
 
-    toast('💾 [SW] DB 저장 중...');
-    // upsert 대신 delete → insert 방식으로 확실하게 교체
     await sb.from('push_subscriptions').delete().eq('user_id', currentUser.id);
-    const { error } = await sb.from('push_subscriptions').insert({
+    await sb.from('push_subscriptions').insert({
       user_id: currentUser.id,
       endpoint: subJson.endpoint,
       p256dh: subJson.keys.p256dh,
       auth: subJson.keys.auth
     });
 
-    if(error){ toast('❌ [SW] DB 저장 실패: ' + error.message); }
-    else { toast('✅ [SW] 푸시 구독 등록 완료!'); }
-
   } catch(e) {
-    toast('❌ [SW] 예외: ' + e.message);
+    // silent fail
   }
 }
 
