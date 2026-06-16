@@ -232,10 +232,12 @@ async function afterLogin(){
 
   if(currentUser.is_admin){
     $('#adminNavBtn').style.display='flex';
+    $('#pushDebugBtn').style.display='block';
     $('#wakeCard').style.display='none';
     $('#timerWrap').classList.remove('show');
   }else{
     $('#adminNavBtn').style.display='none';
+    $('#pushDebugBtn').style.display='none';
   }
 
   currentSession = await getActiveSession();
@@ -251,8 +253,7 @@ async function afterLogin(){
   updateDayChip();
   setupWakeUI();
 
-  // 로그인/회원가입 직후에도 푸시 구독 시도 (Android PWA 첫 실행 대응)
-  setTimeout(() => requestNotifPermission(), 3000);
+  // 자동 푸시 구독 비활성화 (알림 진단에서 수동으로만 구독)
 }
 
 async function loadMyData(){
