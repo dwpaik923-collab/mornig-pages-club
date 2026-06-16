@@ -1656,7 +1656,7 @@ function scheduleHalfTimeNotif(wokeAt){
   if(remaining <= 0) return;
   halfTimeTimer = setTimeout(async () => {
     // 웹 푸시 발송 (백그라운드에서도 작동)
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await sb.auth.getUser();
     if(user){
       fetch('/.netlify/functions/send-push', {
         method: 'POST',
@@ -1704,11 +1704,11 @@ async function subscribePush(){
     }
 
     // Supabase에 구독 정보 저장
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await sb.auth.getUser();
     if(!user) return;
 
     const subJson = sub.toJSON();
-    await supabase.from('push_subscriptions').upsert({
+    await sb.from('push_subscriptions').upsert({
       user_id: user.id,
       endpoint: subJson.endpoint,
       p256dh: subJson.keys.p256dh,
