@@ -1030,6 +1030,12 @@ function showPostDetail(postId){
 }
 $('#detailOverlay').addEventListener('click', e=>{ if(e.target.id==='detailOverlay') $('#detailOverlay').classList.remove('show'); });
 
+// 미니 식물 SVG (viewBox만 같고 크기를 줄임)
+function miniPlantSVG(stage, wilting, theme){
+  const full = plantSVG(stage, wilting, theme);
+  return full.replace('width="200" height="220"', 'width="72" height="79"');
+}
+
 /* ================== 현황(대시보드) ================== */
 async function renderDash(){
   if(!currentSession){ $('#gardenGrid').innerHTML=''; $('#dashFrac').textContent='0/0'; return; }
@@ -1038,9 +1044,19 @@ async function renderDash(){
   const { data: users } = await sb.from('users').select('*').eq('current_session_id', currentSession.id).eq('is_admin', false);
   const list = users || [];
 
-  // 오늘 성공한 사람 수
-  const { data: records } = await sb.from('daily_records').select('user_id,status').eq('session_id', currentSession.id).eq('day', day);
-  const successIds = new Set((records||[]).filter(r=>r.status==='success').map(r=>r.user_id));
+  // 전체 회차 기록 가져오기 (식물 단계 계산용)
+  const { data: allRecords } = await sb.from('daily_records')
+    .select('user_id,status,wilting_level,day')
+    .eq('session_id', currentSession.id);
+  const recordsByUser = {};
+  (allRecords||[]).forEach(r=>{
+    if(!recordsByUser[r.user_id]) recordsByUser[r.user_id] = [];
+    recordsByUser[r.user_id].push(r);
+  });
+
+  // 오늘 성공/패스한 사람 수
+  const todayRecords = (allRecords||[]).filter(r=>r.day===day);
+  const successIds = new Set(todayRecords.filter(r=>r.status==='success'||r.status==='passed').map(r=>r.user_id));
 
   const done = successIds.size;
   const total = list.length;
@@ -1051,9 +1067,19 @@ async function renderDash(){
   await checkPerfectDay(list, successIds);
 
   $('#gardenGrid').innerHTML = list.map(u=>{
+    const recs = recordsByUser[u.id] || [];
+    const completed = recs.filter(r=>r.status==='success'||r.status==='passed').length;
+    const stage = Math.min(PLANT_STAGE_COUNT-1, completed);
+    // 최근 실패 기록의 시들기 정도
+    const lastRec = [...recs].sort((a,b)=>b.day-a.day)[0];
+    const wilting = (lastRec && lastRec.status==='failed') ? (lastRec.wilting_level||1) : 0;
+    const theme = u.plant_theme || 'default';
     const isDone = successIds.has(u.id);
+
     return `<div class="mini ${isDone?'done':''}">
-      <div style="font-size:30px;line-height:1">${isDone?'🌳':'🌱'}</div>
+      <div style="line-height:1;display:flex;justify-content:center;margin-bottom:2px">
+        ${miniPlantSVG(stage, wilting, theme)}
+      </div>
       <div class="mn">${escapeHtml(u.nickname)}</div>
       <div class="dot">${isDone?'✅':'⏳'}</div>
     </div>`;
