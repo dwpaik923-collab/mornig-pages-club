@@ -36,7 +36,7 @@ function toast(msg){
   const el = $('#toast');
   el.textContent = msg;
   el.classList.add('show');
-  setTimeout(()=>el.classList.remove('show'), 2400);
+  setTimeout(()=>el.classList.remove('show'), 4500);
 }
 
 // 한국시간(KST, UTC+9) 기준 현재 시각
@@ -1672,12 +1672,15 @@ function scheduleHalfTimeNotif(wokeAt){
 
 // 알림 권한 요청 + 푸시 구독 (로그인 후)
 async function requestNotifPermission(){
-  if(!('Notification' in window)) return;
+  toast('🔔 [1] 알림 초기화 중...');
+  if(!('Notification' in window)){ toast('❌ [1] Notification 미지원'); return; }
+  toast('🔔 [2] 현재 권한: ' + Notification.permission);
   if(Notification.permission === 'default'){
     const result = await Notification.requestPermission().catch(()=>'denied');
+    toast('🔔 [3] 권한 요청 결과: ' + result);
     if(result !== 'granted') return;
   }
-  if(Notification.permission !== 'granted') return;
+  if(Notification.permission !== 'granted'){ toast('❌ [3] 권한 없음: ' + Notification.permission); return; }
   await subscribePush();
 }
 
@@ -1693,30 +1696,32 @@ function urlBase64ToUint8Array(base64String) {
 
 async function subscribePush(){
   try {
-    if(!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-    if(Notification.permission !== 'granted') return;
-    if(!currentUser) return;
+    if(!('serviceWorker' in navigator) || !('PushManager' in window)){ toast('❌ [SW] ServiceWorker/PushManager 미지원'); return; }
+    if(Notification.permission !== 'granted'){ toast('❌ [SW] 권한 없음: ' + Notification.permission); return; }
+    if(!currentUser){ toast('❌ [SW] currentUser 없음'); return; }
 
-    // SW가 완전히 activate될 때까지 대기 (Android에서 타이밍 문제 방지)
+    toast('🔄 [SW] ServiceWorker 대기 중...');
     const reg = await navigator.serviceWorker.ready;
+    toast('✅ [SW] ServiceWorker 준비됨');
 
-    // 기존 구독이 있어도 항상 DB에 upsert (유저 변경·재로그인 대응)
     let sub = await reg.pushManager.getSubscription();
+    toast(sub ? '♻️ [SW] 기존 구독 있음' : '🆕 [SW] 새 구독 생성 중...');
 
     if(!sub){
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       });
+      toast('✅ [SW] 구독 생성 완료');
     }
 
     const subJson = sub.toJSON();
     if(!subJson.keys || !subJson.keys.p256dh || !subJson.keys.auth){
-      console.warn('푸시 구독 키 누락:', subJson);
+      toast('❌ [SW] 구독 키 누락');
       return;
     }
 
-    // endpoint 기준 upsert + user_id도 항상 최신으로 갱신
+    toast('💾 [SW] DB 저장 중...');
     const { error } = await sb.from('push_subscriptions').upsert({
       user_id: currentUser.id,
       endpoint: subJson.endpoint,
@@ -1724,11 +1729,11 @@ async function subscribePush(){
       auth: subJson.keys.auth
     }, { onConflict: 'endpoint' });
 
-    if(error) console.warn('푸시 DB 저장 실패:', error.message);
-    else console.log('푸시 구독 등록 완료');
+    if(error){ toast('❌ [SW] DB 저장 실패: ' + error.message); }
+    else { toast('✅ [SW] 푸시 구독 등록 완료!'); }
 
   } catch(e) {
-    console.warn('푸시 구독 실패:', e);
+    toast('❌ [SW] 예외: ' + e.message);
   }
 }
 
