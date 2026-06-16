@@ -1601,11 +1601,23 @@ function renderMoodChart(){
   const MOOD_SCORES = {'🌞':5,'🙂':4,'😐':3,'😮‍💨':2,'🌧️':1};
   const MOOD_COLORS = {5:'#ffce7a',4:'#8ba888',3:'#a0a0c0',2:'#e9b97d',1:'#e98a7d'};
 
+  // 이모지 정규화: DB 저장값의 유니코드 변형 대응
+  function moodScore(mood){
+    if(!mood) return null;
+    const direct = MOOD_SCORES[mood];
+    if(direct !== undefined) return direct;
+    // data-score 속성 방식으로 저장된 경우 숫자형 직접 처리
+    const n = parseInt(mood);
+    if(!isNaN(n) && n>=1 && n<=5) return n;
+    return null; // 매핑 실패 시 null (빈 칸 처리)
+  }
+
   // 21일 배열 초기화
   const bars = Array(21).fill(null);
   myRecords.forEach(r => {
     if(r.day >= 1 && r.day <= 21 && r.mood){
-      bars[r.day-1] = { score: MOOD_SCORES[r.mood] || 3, mood: r.mood };
+      const score = moodScore(r.mood);
+      if(score !== null) bars[r.day-1] = { score, mood: r.mood };
     }
   });
 
@@ -1616,7 +1628,8 @@ function renderMoodChart(){
 
   $('#moodChart').innerHTML = bars.map((b,i) => `
     <div class="mood-bar-col">
-      <div class="mood-bar" style="height:${b ? b.score/5*100 : 0}%;background:${b ? MOOD_COLORS[b.score] : 'var(--paper-2)'};opacity:${b?1:0.3}" title="${b?b.mood:''}"></div>
+      <div class="mood-bar-spacer" style="flex:${b ? 5 - b.score : 5}"></div>
+      <div class="mood-bar" style="flex:${b ? b.score : 0};background:${b ? MOOD_COLORS[b.score] : 'var(--paper-2)'};opacity:${b?1:0.3}" title="${b?b.mood:''}"></div>
       <div class="mood-day">${i+1}</div>
     </div>
   `).join('');
