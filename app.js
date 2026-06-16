@@ -253,6 +253,13 @@ async function afterLogin(){
   updateDayChip();
   setupWakeUI();
 
+  if(!currentUser.is_admin){
+    if($('#calendarSection')) $('#calendarSection').style.display='block';
+    renderCalendar();
+    await loadAnnouncement();
+  } else {
+    if($('#calendarSection')) $('#calendarSection').style.display='none';
+  }
   // 자동 푸시 구독 비활성화 (알림 진단에서 수동으로만 구독)
 }
 
@@ -617,6 +624,7 @@ $('#submitBtn').onclick = async ()=>{
     currentUser = updatedUser;
 
     await loadMyData();
+    renderCalendar();
 
     $('#overlay').classList.remove('show');
     if(timerInterval) clearInterval(timerInterval);
@@ -712,6 +720,20 @@ async function renderFeed(){
     (likes||[]).forEach(l=>myLikes.add(l.post_id));
   }
 
+  // cheers 가져오기
+  let myCheerSet = new Set();
+  let cheersByPost = {};
+  try{
+    if(postIds.length){
+      const { data: cheers } = await sb.from('cheers').select('post_id,from_user_id,from_nickname').in('post_id', postIds);
+      (cheers||[]).forEach(c=>{
+        if(c.from_user_id===currentUser.id) myCheerSet.add(c.post_id);
+        if(!cheersByPost[c.post_id]) cheersByPost[c.post_id]=[];
+        cheersByPost[c.post_id].push(c.from_nickname||'익명');
+      });
+    }
+  }catch(e){ /* cheers 테이블 없을 수 있음 */ }
+
   // 댓글 가져오기
   commentsMap = {};
   if(postIds.length){
@@ -756,14 +778,15 @@ async function renderFeed(){
         <div class="post-actions">
           <button class="act ${liked?'on':''}" data-like="${p.id}"><span class="ic">${liked?'❤️':'🤍'}</span> <span class="lc">${p.likes_count||0}</span></button>
           <button class="act" data-comment="${p.id}"><span class="ic">💬</span> 댓글 ${commentCount>0?commentCount:''}</button>
-          <button class="act" data-cheer="${escapeHtml(name)}"><span class="ic">🔥</span> 응원</button>
+          <button class="act ${myCheerSet.has(p.id)?'on':''}" data-post-cheer="${p.id}"><span class="ic">🔥</span> <span class="cc">${(cheersByPost[p.id]||[]).length||''}</span></button>
         </div>
+        ${(cheersByPost[p.id]||[]).length ? `<div class="cheer-list">🔥 ${cheersByPost[p.id].slice(0,3).map(n=>escapeHtml(n)).join(', ')}${cheersByPost[p.id].length>3?' 외 '+(cheersByPost[p.id].length-3)+'명':''}이 응원했어요</div>` : ''}
       </div>
     </div>`;
   }).join('');
 
   $$('#postList [data-like]').forEach(b=>b.onclick=()=>toggleLike(b));
-  $$('#postList [data-cheer]').forEach(b=>b.onclick=()=>toast(`${b.dataset.cheer}님에게 응원을 보냈어요 🔥`));
+  $$('#postList [data-post-cheer]').forEach(b=>b.onclick=()=>toggleCheer(b));
   $$('#postList [data-comment]').forEach(b=>b.onclick=()=>openComments(b.dataset.comment));
 }
 
@@ -1097,6 +1120,8 @@ async function renderAdmin(){
   await renderAdminUsers();
   await renderAdminQuotes();
   await renderAdminPosts();
+  await renderAdminAnnouncements();
+  await renderAdminUserRecords();
 }
 
 async function renderAdminSession(){
@@ -1601,19 +1626,17 @@ function setupThemeSelectors(){
 function renderMoodChart(){
   const MOOD_SCORES = {'🌞':5,'🙂':4,'😐':3,'😮‍💨':2,'🌧️':1};
   const MOOD_COLORS = {5:'#ffce7a',4:'#8ba888',3:'#a0a0c0',2:'#e9b97d',1:'#e98a7d'};
+  const MOOD_LABELS = {5:'🌞',4:'🙂',3:'😐',2:'😮‍💨',1:'🌧️'};
 
-  // 이모지 정규화: DB 저장값의 유니코드 변형 대응
   function moodScore(mood){
     if(!mood) return null;
     const direct = MOOD_SCORES[mood];
     if(direct !== undefined) return direct;
-    // data-score 속성 방식으로 저장된 경우 숫자형 직접 처리
     const n = parseInt(mood);
     if(!isNaN(n) && n>=1 && n<=5) return n;
-    return null; // 매핑 실패 시 null (빈 칸 처리)
+    return null;
   }
 
-  // 21일 배열 초기화
   const bars = Array(21).fill(null);
   myRecords.forEach(r => {
     if(r.day >= 1 && r.day <= 21 && r.mood){
@@ -1627,13 +1650,95 @@ function renderMoodChart(){
     return;
   }
 
-  $('#moodChart').innerHTML = bars.map((b,i) => `
-    <div class="mood-bar-col">
-      <div class="mood-bar-spacer" style="flex:${b ? 5 - b.score : 4}"></div>
-      <div class="mood-bar" style="flex:${b ? b.score : 1};background:${b ? MOOD_COLORS[b.score] : 'var(--paper-2)'};opacity:${b?1:0.25}" title="${b?b.mood:''}"></div>
-      <div class="mood-day">${i+1}</div>
-    </div>
-  `).join('');
+  const W=300, H=90, PL=28, PR=10, PT=14, PB=20;
+  const iW = W-PL-PR, iH = H-PT-PB;
+
+  const pts = bars.map((b,i) => b ? {
+    x: PL + (i/20)*iW,
+    y: PT + (1-(b.score-1)/4)*iH,
+    score: b.score, mood: b.mood, day: i+1
+  } : null);
+  const valid = pts.filter(Boolean);
+
+  // 꺾은선 path (cubic bezier)
+  let path = '';
+  valid.forEach((p,idx) => {
+    if(idx===0){ path=`M${p.x.toFixed(1)},${p.y.toFixed(1)}`; }
+    else {
+      const prev=valid[idx-1];
+      const cpx=(prev.x+p.x)/2;
+      path+=` C${cpx.toFixed(1)},${prev.y.toFixed(1)} ${cpx.toFixed(1)},${p.y.toFixed(1)} ${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+    }
+  });
+
+  // 그라디언트 채우기 (path 아래 영역)
+  const lastPt = valid[valid.length-1];
+  const firstPt = valid[0];
+  const fillPath = path + ` L${lastPt.x.toFixed(1)},${(PT+iH).toFixed(1)} L${firstPt.x.toFixed(1)},${(PT+iH).toFixed(1)} Z`;
+
+  // 그리드 라인 (5 레벨)
+  const gridLines = [1,2,3,4,5].map(score => {
+    const y = PT + (1-(score-1)/4)*iH;
+    return `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W-PR}" y2="${y.toFixed(1)}" stroke="var(--line)" stroke-width="0.7"/>
+            <text x="${(PL-4).toFixed(0)}" y="${(y+3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--ink-soft)">${MOOD_LABELS[score]}</text>`;
+  }).join('');
+
+  // 날짜 레이블
+  const dayLabels = [1,7,14,21].map(d => {
+    const x = PL+((d-1)/20)*iW;
+    return `<text x="${x.toFixed(1)}" y="${(H+2).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--ink-soft)">${d}일</text>`;
+  }).join('');
+
+  // 데이터 포인트
+  const dots = valid.map(p =>
+    `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.5" fill="${MOOD_COLORS[p.score]}" stroke="#fff" stroke-width="2"><title>${p.day}일 ${p.mood}</title></circle>`
+  ).join('');
+
+  $('#moodChart').innerHTML = `<svg viewBox="0 0 ${W} ${H+10}" width="100%" style="overflow:visible">
+    <defs>
+      <linearGradient id="moodGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--rose)" stop-opacity="0.18"/>
+        <stop offset="100%" stop-color="var(--rose)" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    ${gridLines}
+    <path d="${fillPath}" fill="url(#moodGrad)"/>
+    <path d="${path}" fill="none" stroke="var(--rose)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+    ${dots}
+    ${dayLabels}
+  </svg>`;
+}
+
+/* ================== 21일 달력 ================== */
+function renderCalendar(){
+  if(!currentUser || currentUser.is_admin) return;
+  const calGrid = $('#calendarGrid');
+  const calCount = $('#calendarCount');
+  if(!calGrid) return;
+  const day = getCurrentDay();
+
+  const cells = Array(21).fill(null).map((_,i) => {
+    const d = i+1;
+    const rec = myRecords.find(r => r.day===d);
+    const isToday = d===day;
+    const isFuture = d>day && !rec;
+    let stamp='', bg='var(--paper-2)', border='1.5px solid var(--line)', opacity='1', numColor='var(--ink-soft)';
+    if(rec){
+      if(rec.status==='success'){ stamp='🌱'; bg='#eaf6eb'; border='1.5px solid #b8deba'; numColor='var(--sage-deep)'; }
+      else if(rec.status==='passed'){ stamp='🛡️'; bg='#f0f0f8'; border='1.5px solid #c0c0e0'; }
+      else if(rec.status==='failed'){ stamp='💧'; bg='#fdeae5'; border='1.5px solid #f4c4b8'; numColor='var(--red)'; }
+    }
+    if(isToday) border='2.5px solid var(--rose)';
+    if(isFuture) opacity='0.3';
+    return `<div class="cal-cell" style="background:${bg};border:${border};opacity:${opacity}">
+      <div style="font-size:${stamp?'15px':'12px'};line-height:1.1">${stamp||d}</div>
+      ${stamp?`<div style="font-size:8px;color:${numColor};font-weight:600">${d}</div>`:''}
+    </div>`;
+  });
+
+  calGrid.innerHTML = cells.join('');
+  const count = myRecords.filter(r=>r.status==='success'||r.status==='passed').length;
+  if(calCount) calCount.textContent = `${count} / 21`;
 }
 
 /* ================== 키워드 클라우드 ================== */
@@ -1745,6 +1850,133 @@ async function checkPerfectDay(users, successIds){
 }
 
 /* ================== 골든타임 45분 알림 ================== */
+/* ================== 응원 (Cheers) ================== */
+async function toggleCheer(btn){
+  const postId = btn.dataset.postCheer;
+  const isOn = btn.classList.contains('on');
+  try{
+    if(isOn){
+      await sb.from('cheers').delete().eq('post_id', postId).eq('from_user_id', currentUser.id);
+    }else{
+      const { data: post } = await sb.from('posts').select('user_id').eq('id', postId).single();
+      await sb.from('cheers').insert({
+        post_id: postId,
+        from_user_id: currentUser.id,
+        to_user_id: post?.user_id || currentUser.id,
+        from_nickname: currentUser.nickname
+      });
+      toast('🔥 응원을 보냈어요!');
+    }
+    await renderFeed();
+  }catch(e){ toast('응원 오류: ' + e.message); }
+}
+
+/* ================== 공지 배너 ================== */
+async function loadAnnouncement(){
+  try{
+    const { data } = await sb.from('announcements').select('*').eq('is_active', true).order('created_at', {ascending:false}).limit(1);
+    if(!data || !data.length){ $('#announceBanner').classList.remove('show'); return; }
+    const ann = data[0];
+    if(store.get('mpc_ann_dismissed') === ann.id){ $('#announceBanner').classList.remove('show'); return; }
+    $('#announceBannerText').textContent = ann.content;
+    $('#announceBanner').dataset.annId = ann.id;
+    $('#announceBanner').classList.add('show');
+  }catch(e){ /* announcements 테이블 없을 수 있음 */ }
+}
+
+$('#announceBannerClose').onclick = ()=>{
+  const id = $('#announceBanner').dataset.annId;
+  if(id) store.set('mpc_ann_dismissed', id);
+  $('#announceBanner').classList.remove('show');
+};
+
+/* ================== 관리자 - 공지 ================== */
+async function renderAdminAnnouncements(){
+  try{
+    const { data } = await sb.from('announcements').select('*').order('created_at',{ascending:false});
+    const list = data || [];
+    if(!list.length){ $('#announcementList').innerHTML='<div class="empty">등록된 공지가 없어요.</div>'; return; }
+    $('#announcementList').innerHTML = list.map(a=>`
+      <div class="list-item">
+        <div class="row1">
+          <div>
+            <div class="title">${a.is_active?'🟢':'⚫'} ${escapeHtml(a.content.slice(0,50))}${a.content.length>50?'...':''}</div>
+            <div class="desc">${new Date(a.created_at).toLocaleDateString('ko-KR')} · ${a.is_active?'활성':'비활성'}</div>
+          </div>
+          <div class="li-actions">
+            <button data-toggle-ann="${a.id}" data-ann-active="${a.is_active}">${a.is_active?'비활성화':'활성화'}</button>
+            <button class="danger" data-del-ann="${a.id}">삭제</button>
+          </div>
+        </div>
+      </div>`).join('');
+    $$('#announcementList [data-toggle-ann]').forEach(b=>b.onclick=async()=>{
+      const isActive = b.dataset.annActive==='true';
+      await sb.from('announcements').update({is_active:!isActive}).eq('id',b.dataset.toggleAnn);
+      toast(isActive?'공지를 비활성화했어요.':'공지를 활성화했어요.');
+      await renderAdminAnnouncements();
+    });
+    $$('#announcementList [data-del-ann]').forEach(b=>b.onclick=async()=>{
+      if(!confirm('이 공지를 삭제할까요?')) return;
+      await sb.from('announcements').delete().eq('id',b.dataset.delAnn);
+      toast('공지를 삭제했어요.');
+      await renderAdminAnnouncements();
+    });
+  }catch(e){ $('#announcementList').innerHTML='<div class="empty" style="color:var(--red)">announcements 테이블을 생성해주세요. (Supabase SQL 에디터)</div>'; }
+}
+
+$('#sendAnnouncementBtn').onclick = async()=>{
+  const text = $('#announcementText').value.trim();
+  if(!text){ toast('공지 내용을 입력해주세요.'); return; }
+  try{
+    await sb.from('announcements').update({is_active:false}).eq('is_active',true);
+    await sb.from('announcements').insert({content:text, is_active:true});
+    $('#announcementText').value='';
+    toast('✅ 공지가 발송됐어요!');
+    await renderAdminAnnouncements();
+  }catch(e){ toast('공지 발송 오류: '+e.message); }
+};
+
+/* ================== 관리자 - 회원별 기록 ================== */
+async function renderAdminUserRecords(){
+  try{
+    const { data: users } = await sb.from('users').select('id,nickname,username').eq('is_admin',false).order('nickname');
+    const list = users || [];
+    const sel = $('#userRecordSelect');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">회원을 선택하세요</option>' +
+      list.map(u=>`<option value="${u.id}">${escapeHtml(u.nickname)} (${escapeHtml(u.username)})</option>`).join('');
+    if(prev){ sel.value = prev; if(sel.value) await loadUserRecord(sel.value); }
+  }catch(e){ console.error(e); }
+}
+
+$('#userRecordSelect').onchange = async()=>{
+  const uid = $('#userRecordSelect').value;
+  if(uid) await loadUserRecord(uid);
+  else $('#userRecordList').innerHTML='';
+};
+
+async function loadUserRecord(userId){
+  if(!currentSession){ $('#userRecordList').innerHTML='<div class="empty">진행 중인 회차가 없어요.</div>'; return; }
+  try{
+    const { data: records } = await sb.from('daily_records').select('*').eq('user_id',userId).eq('session_id',currentSession.id).order('day');
+    const list = records||[];
+    if(!list.length){ $('#userRecordList').innerHTML='<div class="empty">이 회원의 기록이 없어요.</div>'; return; }
+    const statusLabel = {success:'✅ 성공', passed:'🛡️ 패스', failed:'💧 실패', woke:'☀️ 기상중', pending:'⏳ 대기'};
+    const successCount = list.filter(r=>r.status==='success'||r.status==='passed').length;
+    $('#userRecordList').innerHTML = `<div class="card" style="margin-bottom:10px">
+      <div style="font-size:13px;color:var(--ink-soft)">총 ${list.length}일 기록 · 성공/패스 ${successCount}일</div>
+    </div>` + list.map(r=>`
+      <div class="list-item">
+        <div class="row1">
+          <div>
+            <div class="title">${r.day}일차 · ${statusLabel[r.status]||r.status} ${r.mood||''}</div>
+            <div class="desc">기상: ${r.woke_at?kstTimeStr(r.woke_at):'-'} · 인증: ${r.verified_at?kstTimeStr(r.verified_at):'-'}</div>
+          </div>
+        </div>
+      </div>`).join('');
+  }catch(e){ $('#userRecordList').innerHTML='<div class="empty">기록을 불러오지 못했어요.</div>'; }
+}
+
 let halfTimeTimer = null;
 function scheduleHalfTimeNotif(wokeAt){
   if(halfTimeTimer) clearTimeout(halfTimeTimer);

@@ -198,12 +198,18 @@
   }
   .theme-btn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
 
-  /* mood chart */
-  .mood-chart-wrap{display:flex;align-items:stretch;gap:4px;height:100px;margin-top:14px;overflow-x:auto;padding-bottom:2px;}
-  .mood-bar-col{display:flex;flex-direction:column;align-items:center;flex:1;min-width:24px;}
-  .mood-bar-spacer{flex:1;min-height:0;}
-  .mood-bar{width:80%;border-radius:4px 4px 0 0;min-height:4px;transition:flex .5s,background .3s;}
-  .mood-day{font-size:9px;color:var(--ink-soft);margin-top:3px;flex-shrink:0;}
+  /* mood chart (line) */
+  .mood-chart-wrap{margin-top:8px;overflow:visible;}
+
+  /* 21일 달력 */
+  .cal-cell{aspect-ratio:1;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;transition:.2s;}
+
+  /* 응원 목록 */
+  .cheer-list{font-size:12px;color:var(--ink-soft);margin-top:6px;padding:5px 8px;background:var(--paper-2);border-radius:10px;}
+
+  /* 공지 배너 */
+  .announce-banner{margin:12px 18px 0;background:linear-gradient(120deg,var(--dusk),var(--night));color:#fff;border-radius:18px;padding:14px 16px 14px 18px;position:relative;display:none;}
+  .announce-banner.show{display:block;}
 
   /* cloud */
   .cloud{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:14px;align-items:baseline;min-height:40px;}
@@ -357,6 +363,11 @@
 
   <!-- ============ HOME ============ -->
   <section class="screen" id="home">
+    <!-- 공지 배너 -->
+    <div class="announce-banner" id="announceBanner">
+      <div id="announceBannerText" style="font-size:14px;line-height:1.6;padding-right:28px"></div>
+      <button id="announceBannerClose" style="position:absolute;top:10px;right:12px;background:none;border:none;color:rgba(255,255,255,.7);font-size:20px;cursor:pointer;line-height:1">✕</button>
+    </div>
     <div class="sky" id="sky">
       <div class="stars" id="stars"></div>
       <div class="toprow">
@@ -423,6 +434,14 @@
       </div>
       <div class="timer-msg green" id="timerMsg">여유로워요! 천천히 세 장을 채워보세요 🌿</div>
       <button class="verify-btn" id="verifyBtn">📷 모닝페이지 인증하기</button>
+    </div>
+    <!-- 21일 달력 -->
+    <div id="calendarSection" style="margin:18px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <h2 style="font-family:'Gowun Batang',serif;font-size:18px">21일 기록</h2>
+        <span id="calendarCount" style="font-size:13px;color:var(--ink-soft)">0 / 21</span>
+      </div>
+      <div id="calendarGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px"></div>
     </div>
   </section>
 
@@ -547,6 +566,8 @@
       <button data-panel="adminUsers">회원 관리</button>
       <button data-panel="adminQuotes">명언 관리</button>
       <button data-panel="adminPosts">피드 관리</button>
+      <button data-panel="adminAnnouncements">공지</button>
+      <button data-panel="adminUserRecords">회원 기록</button>
     </div>
 
     <!-- session -->
@@ -582,6 +603,27 @@
     <!-- posts -->
     <div class="admin-panel" id="adminPosts">
       <div id="adminPostList"></div>
+    </div>
+
+    <!-- announcements -->
+    <div class="admin-panel" id="adminAnnouncements">
+      <div class="card" style="margin-bottom:10px">
+        <h2>전체 공지</h2>
+        <p class="sub" style="margin-bottom:12px">공지를 발송하면 모든 회원의 홈 상단에 배너로 표시돼요.</p>
+        <div class="field"><textarea id="announcementText" rows="3" placeholder="공지 내용을 입력하세요"></textarea></div>
+        <button class="primary" id="sendAnnouncementBtn">공지 발송</button>
+      </div>
+      <div id="announcementList"></div>
+    </div>
+
+    <!-- user records -->
+    <div class="admin-panel" id="adminUserRecords">
+      <div style="margin:0 18px 12px">
+        <select id="userRecordSelect" style="width:100%;border:1.5px solid var(--line);border-radius:14px;padding:12px;font-family:'Noto Sans KR';font-size:14px;background:#fff;color:var(--ink)">
+          <option value="">회원을 선택하세요</option>
+        </select>
+      </div>
+      <div id="userRecordList"></div>
     </div>
   </section>
 
