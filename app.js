@@ -1656,7 +1656,7 @@ function scheduleHalfTimeNotif(wokeAt){
   halfTimeTimer = setTimeout(async () => {
     // 웹 푸시 발송 (백그라운드에서도 작동)
     if(currentUser){
-      fetch('/.netlify/functions/send-push', {
+      fetch('https://lztzqqijllczwoojubsf.supabase.co/functions/v1/clever-responder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: currentUser.id })
