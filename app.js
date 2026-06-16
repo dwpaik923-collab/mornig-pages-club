@@ -270,10 +270,18 @@ async function setQuote(){
     $('#quote').innerHTML = `"오늘도 세 장, 나에게 건네는 인사."`;
   }
 }
+// Supabase 타임스탬프를 항상 UTC로 강제 파싱 (Z 없으면 붙임)
+function parseUTC(isoStr){
+  if(!isoStr) return null;
+  const s = isoStr.replace(' ', 'T');
+  if(s.endsWith('Z') || s.includes('+') || s.includes('-', 10)) return new Date(s);
+  return new Date(s + 'Z');
+}
+
 // KST 시간 문자열 반환 (HH:MM)
 function kstTimeStr(isoStr){
   if(!isoStr) return '-';
-  const d = new Date(new Date(isoStr).getTime() + 9*60*60*1000);
+  const d = new Date(parseUTC(isoStr).getTime() + 9*60*60*1000);
   const h = String(d.getUTCHours()).padStart(2,'0');
   const m = String(d.getUTCMinutes()).padStart(2,'0');
   return `${h}:${m}`;
@@ -281,7 +289,7 @@ function kstTimeStr(isoStr){
 // KST 날짜 문자열 반환 (YYYY. MM. DD.)
 function kstDateStr(isoStr){
   if(!isoStr) return '-';
-  const d = new Date(new Date(isoStr).getTime() + 9*60*60*1000);
+  const d = new Date(parseUTC(isoStr).getTime() + 9*60*60*1000);
   return `${d.getUTCFullYear()}. ${d.getUTCMonth()+1}. ${d.getUTCDate()}.`;
 }
 function escapeHtml(str){
@@ -366,7 +374,7 @@ async function setupWakeUI(){
   // pending - 골든타임 진행 중 or 만료
   // woke_at이 오늘 KST 날짜와 다르면 (어제 기록이 남은 경우) failed 처리
   const wokeAtDateKST = record.woke_at
-    ? new Date(new Date(record.woke_at).getTime() + 9*60*60*1000).toISOString().slice(0,10)
+    ? new Date(parseUTC(record.woke_at).getTime() + 9*60*60*1000).toISOString().slice(0,10)
     : null;
   if(wokeAtDateKST && wokeAtDateKST !== todayKST()){
     try{
@@ -426,7 +434,7 @@ $('#wakeBtn').onclick = async ()=>{
 };
 
 function startGoldenTimer(record){
-  const wokeAt = new Date(record.woke_at).getTime();
+  const wokeAt = parseUTC(record.woke_at).getTime();
 
   // woke_at이 24시간보다 오래됐으면 (비정상 기록) auto-fail
   if(Date.now() - wokeAt > 24*60*60*1000){
@@ -743,7 +751,7 @@ function hashCode(str){
   return Math.abs(hash);
 }
 function timeAgoStr(iso){
-  const diff = Math.floor((Date.now()-new Date(iso).getTime())/1000);
+  const diff = Math.floor((Date.now() - parseUTC(iso).getTime())/1000);
   if(diff<60) return '방금 전';
   if(diff<3600) return Math.floor(diff/60)+'분 전';
   if(diff<86400) return Math.floor(diff/3600)+'시간 전';
