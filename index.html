@@ -120,6 +120,23 @@
   .wake-info .wi-item{display:flex;flex-direction:column;gap:2px;}
   .wake-info .wi-label{font-size:11px;opacity:.7;}
   .wake-info .wi-value{font-family:'Gowun Batang',serif;font-size:17px;font-weight:700;}
+  .pwa-btn{
+    display:inline-flex;align-items:center;gap:6px;
+    margin-top:12px;padding:7px 14px;border-radius:30px;
+    background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.28);
+    color:#fff;font-size:12px;font-weight:500;cursor:pointer;
+    font-family:'Noto Sans KR';transition:.15s;
+  }
+  .pwa-btn:active{transform:scale(.96);}
+  .pwa-btn{
+    display:inline-flex;align-items:center;gap:6px;
+    margin-top:14px;padding:8px 16px;border-radius:30px;
+    background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);
+    color:#fff;font-size:12px;font-weight:500;cursor:pointer;
+    font-family:'Noto Sans KR';backdrop-filter:blur(4px);
+    transition:background .2s;
+  }
+  .pwa-btn:hover{background:rgba(255,255,255,.25);}
 
   .card{background:var(--paper);margin:18px;border-radius:22px;padding:22px;box-shadow:var(--shadow);}
   .card h2{font-family:'Gowun Batang',serif;font-size:19px;margin-bottom:4px;}
@@ -319,6 +336,7 @@
       </div>
       <div class="daychip" id="dayChip">🌱 1일차 · 오늘도 시작해요</div>
       <div class="wake-info" id="wakeInfo" style="display:none"></div>
+      <button class="pwa-btn" id="pwaBtn">📲 앱으로 설치하기</button>
     </div>
 
     <div class="card" id="wakeCard">
@@ -525,6 +543,67 @@
         <button class="verify-btn" id="commentSubmitBtn" style="width:auto;margin-top:0;padding:12px 18px;flex-shrink:0">등록</button>
       </div>
       <button class="ghost" id="commentCloseBtn">닫기</button>
+    </div>
+  </div>
+
+  <!-- PWA 설치 안내 팝업 -->
+  <div class="overlay center" id="pwaOverlay">
+    <div class="sheet" style="text-align:center">
+      <div style="font-size:48px;margin-bottom:8px">📲</div>
+      <h2 style="justify-content:center;display:flex">앱으로 설치하기</h2>
+      <p style="color:var(--ink-soft);font-size:13px;margin-bottom:20px;line-height:1.7">홈 화면에 추가하면 앱처럼 바로 열 수 있어요.<br>주소창 없이 깔끔하게 실행돼요!</p>
+
+      <div style="background:var(--paper-2);border-radius:16px;padding:16px;margin-bottom:12px;text-align:left">
+        <div style="font-weight:700;font-size:14px;margin-bottom:10px">🍎 아이폰 (Safari)</div>
+        <div style="font-size:13px;color:var(--ink-soft);line-height:2">
+          1. <b>Safari</b>로 이 페이지를 열어주세요<br>
+          2. 하단 <b>공유 버튼(□↑)</b>을 눌러요<br>
+          3. <b>"홈 화면에 추가"</b>를 선택해요<br>
+          4. 오른쪽 위 <b>"추가"</b>를 누르면 완료!
+        </div>
+      </div>
+
+      <div style="background:var(--paper-2);border-radius:16px;padding:16px;margin-bottom:20px;text-align:left">
+        <div style="font-weight:700;font-size:14px;margin-bottom:10px">🤖 안드로이드 (Chrome)</div>
+        <div style="font-size:13px;color:var(--ink-soft);line-height:2">
+          1. <b>Chrome</b>으로 이 페이지를 열어주세요<br>
+          2. 주소창 오른쪽 <b>⋮ 메뉴</b>를 눌러요<br>
+          3. <b>"홈 화면에 추가"</b>를 선택해요<br>
+          4. <b>"추가"</b>를 누르면 완료!
+        </div>
+      </div>
+
+      <button class="primary" id="pwaCloseBtn">확인했어요</button>
+    </div>
+  </div>
+
+  <!-- PWA 설치 안내 팝업 -->
+  <div class="overlay center" id="pwaOverlay">
+    <div class="sheet" style="max-width:420px;margin:20px">
+      <div style="text-align:center;font-size:40px;margin-bottom:8px">📱</div>
+      <h2 style="text-align:center;margin-bottom:6px">앱으로 설치하기</h2>
+      <p style="text-align:center;color:var(--ink-soft);font-size:13px;margin-bottom:20px">홈 화면에 추가하면 진짜 앱처럼<br>주소창 없이 바로 열 수 있어요!</p>
+
+      <div style="background:var(--paper-2);border-radius:16px;padding:16px;margin-bottom:12px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:10px">🍎 아이폰 (Safari)</div>
+        <div style="font-size:13px;color:var(--ink);line-height:1.8">
+          1. <b>사파리</b>로 이 페이지 접속<br>
+          2. 하단 공유 버튼 <span style="background:#fff;border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-size:12px">□↑</span> 탭<br>
+          3. <b>"홈 화면에 추가"</b> 선택 → 추가
+        </div>
+      </div>
+
+      <div style="background:var(--paper-2);border-radius:16px;padding:16px;margin-bottom:20px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:10px">🤖 안드로이드 (Chrome)</div>
+        <div style="font-size:13px;color:var(--ink);line-height:1.8">
+          1. <b>크롬</b>으로 이 페이지 접속<br>
+          2. 주소창 옆 설치 버튼 또는 우측 상단 <b>⋮</b> 메뉴<br>
+          3. <b>"홈 화면에 추가"</b> 선택 → 설치
+        </div>
+      </div>
+
+      <button class="primary" id="pwaCloseBtn">확인했어요!</button>
+      <button class="ghost" id="pwaDontShowBtn" style="margin-top:10px;font-size:13px">다시 보지 않기</button>
     </div>
   </div>
 

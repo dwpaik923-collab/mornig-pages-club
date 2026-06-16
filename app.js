@@ -1315,7 +1315,34 @@ async function checkFailures(){
   myRecords.sort((a,b)=>a.day-b.day);
 }
 
-/* ================== 앱 초기화 ================== */
+/* ================== PWA 설치 안내 팝업 ================== */
+function checkPwaPopup(){
+  const dontShow = store.get('mpc_pwa_dont_show');
+  if(!dontShow){
+    // 이미 standalone(설치된 앱)으로 실행 중이면 팝업 안 띄움
+    if(window.matchMedia('(display-mode: standalone)').matches) return;
+    if(window.navigator.standalone === true) return;
+    setTimeout(()=>$('#pwaOverlay').classList.add('show'), 800);
+  }
+}
+
+$('#pwaBtn').onclick = ()=>{
+  if(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone){
+    toast('이미 앱으로 실행 중이에요 ✅');
+    return;
+  }
+  $('#pwaOverlay').classList.add('show');
+};
+
+$('#pwaCloseBtn').onclick = ()=>{
+  $('#pwaOverlay').classList.remove('show');
+};
+
+$('#pwaDontShowBtn').onclick = ()=>{
+  store.set('mpc_pwa_dont_show', '1');
+  $('#pwaOverlay').classList.remove('show');
+  toast('다음부터는 표시되지 않아요');
+};
 async function init(){
   const savedId = store.get('mpc_user_id');
   if(savedId){
@@ -1348,6 +1375,7 @@ async function init(){
     await loadMyData();
     await setupWakeUI();
     await renderGarden();
+    checkPwaPopup();
   }else{
     showScreen('authScreen');
   }
