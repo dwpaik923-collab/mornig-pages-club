@@ -465,7 +465,7 @@ async function setupWakeUI(){
     <div class="wi-item"><span class="wi-label">⏰ 오늘 기상</span><span class="wi-value">${kstTimeStr(record.woke_at)}</span></div>
     <div class="wi-item"><span class="wi-label">상태</span><span class="wi-value">작성 중</span></div>
   `;
-  startGoldenTimer(record);
+  await startGoldenTimer(record);
 }
 
 $('#wakeBtn').onclick = async ()=>{
