@@ -123,7 +123,7 @@ $('#loginBtn').onclick = async ()=>{
         data = loginRow; // 해시 일치
       } else if(loginRow.password === password){
         // 평문 → 해시로 자동 마이그레이션
-        await sb.from('users').update({password: inputHash}).eq('id', loginRow.id).catch(()=>{});
+        try{ await sb.from('users').update({password: inputHash}).eq('id', loginRow.id); }catch(_){}
         data = loginRow;
       }
     }
