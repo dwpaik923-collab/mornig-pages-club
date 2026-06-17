@@ -235,6 +235,7 @@ $('#logoutBtn').onclick = ()=>{
   $('#loginCard').style.display='block';
   $('#signupCard').style.display='none';
   $('#loginUsername').value=''; $('#loginPassword').value='';
+  $('#app').style.display='block';
 };
 
 async function getActiveSession(){
