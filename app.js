@@ -1609,6 +1609,7 @@ async function renderHomeCards(){
   $('#homePass').style.color = currentUser.pass_used ? 'var(--rose)' : 'var(--sage-deep)';
   $('#homeGardenBar').style.width = Math.min(100, completedCount/TOTAL_DAYS*100)+'%';
   $('#homeGardenCard').style.display = 'block';
+  await renderReceivedCheers();
 
   // B) 오늘 현황 카드
   if(currentSession){
@@ -2033,6 +2034,37 @@ async function checkPerfectDay(users, successIds){
 }
 
 /* ================== 골든타임 45분 알림 ================== */
+/* ================== 받은 응원 카드 ================== */
+async function renderReceivedCheers(){
+  if(!currentUser || currentUser.is_admin) return;
+  try{
+    const { data: cheers } = await sb.from('cheers')
+      .select('from_nickname, post_id, created_at')
+      .eq('to_user_id', currentUser.id)
+      .order('created_at', {ascending:false})
+      .limit(10);
+    const card = $('#homeCheerCard');
+    if(!card) return;
+    if(!cheers || !cheers.length){ card.style.display='none'; return; }
+
+    // 오늘 KST 기준으로 필터 (없으면 최근 3개)
+    const todayStr = todayKST();
+    const todayCheers = cheers.filter(c => c.created_at && c.created_at.slice(0,10) === todayStr);
+    const display = todayCheers.length ? todayCheers : cheers.slice(0,3);
+
+    // 닉네임별 묶기
+    const nameMap = {};
+    display.forEach(c => {
+      const n = c.from_nickname || '익명';
+      nameMap[n] = (nameMap[n]||0) + 1;
+    });
+    const names = Object.entries(nameMap).map(([n,cnt]) => cnt>1 ? `${n}(${cnt})` : n);
+
+    $('#homeCheerList').innerHTML = `<div style="font-size:14px;line-height:1.7">🔥 <b>${names.join(', ')}</b>님이 응원했어요!</div>`;
+    card.style.display = 'block';
+  }catch(e){ /* cheers 테이블 없을 수도 있음 */ }
+}
+
 /* ================== 응원 (Cheers) ================== */
 async function toggleCheer(btn){
   const postId = btn.dataset.postCheer;
@@ -2049,8 +2081,18 @@ async function toggleCheer(btn){
         from_nickname: currentUser.nickname
       });
       toast('🔥 응원을 보냈어요!');
+      // 받는 사람 푸시 알림 시도 (구독 있을 때만)
+      if(post?.user_id && post.user_id !== currentUser.id){
+        fetch('https://lztzqqijllczwoojubsf.supabase.co/functions/v1/send-cheer-push', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer sb_publishable_4LWywzGz5JnXFmoNG3N8tw_IZbow1SP'},
+          body: JSON.stringify({ to_user_id: post.user_id, from_nickname: currentUser.nickname })
+        }).catch(()=>{});
+      }
     }
     await renderFeed();
+    // 내가 받은 응원 카드도 갱신 (홈에 있을 경우)
+    if(document.getElementById('homeCheerCard')) await renderReceivedCheers();
   }catch(e){ toast('응원 오류: ' + e.message); }
 }
 
