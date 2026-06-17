@@ -82,6 +82,7 @@ $$('.nav button').forEach(b=>{
   b.onclick = async ()=>{
     setActiveNav(b.dataset.screen);
     showScreen(b.dataset.screen);
+    if(b.dataset.screen==='home' && currentUser && !currentUser.is_admin) await loadAnnouncement();
     if(b.dataset.screen==='feed') await renderFeed();
     if(b.dataset.screen==='garden') await renderGarden();
     if(b.dataset.screen==='dash') await renderDash();
@@ -2049,14 +2050,15 @@ async function toggleCheer(btn){
 /* ================== 공지 배너 ================== */
 async function loadAnnouncement(){
   try{
-    const { data } = await sb.from('announcements').select('*').eq('is_active', true).order('created_at', {ascending:false}).limit(1);
+    const { data, error } = await sb.from('announcements').select('*').eq('is_active', true).order('created_at', {ascending:false}).limit(1);
+    if(error){ console.warn('공지 로드 오류:', error.message); $('#announceBanner').classList.remove('show'); return; }
     if(!data || !data.length){ $('#announceBanner').classList.remove('show'); return; }
     const ann = data[0];
-    if(store.get('mpc_ann_dismissed') === ann.id){ $('#announceBanner').classList.remove('show'); return; }
+    if(String(store.get('mpc_ann_dismissed')) === String(ann.id)){ $('#announceBanner').classList.remove('show'); return; }
     $('#announceBannerText').textContent = ann.content;
     $('#announceBanner').dataset.annId = ann.id;
     $('#announceBanner').classList.add('show');
-  }catch(e){ /* announcements 테이블 없을 수 있음 */ }
+  }catch(e){ console.warn('공지 로드 예외:', e.message); }
 }
 
 $('#announceBannerClose').onclick = ()=>{
