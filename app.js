@@ -496,7 +496,7 @@ $('#wakeBtn').onclick = async ()=>{
   }
 };
 
-function startGoldenTimer(record){
+async function startGoldenTimer(record){
   const wokeAt = parseUTC(record.woke_at).getTime();
 
   // woke_at이 24시간보다 오래됐으면 (비정상 기록) auto-fail
