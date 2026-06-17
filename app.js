@@ -114,8 +114,19 @@ $('#loginBtn').onclick = async ()=>{
 
   $('#loginBtn').disabled = true;
   try{
-    const { data, error } = await sb.from('users').select('*').eq('username', username).eq('password', password).maybeSingle();
-    if(error) throw error;
+    const { data: loginRow, error: loginErr } = await sb.from('users').select('*').eq('username', username).maybeSingle();
+    if(loginErr) throw loginErr;
+    let data = null;
+    if(loginRow){
+      const inputHash = await sha256(password);
+      if(loginRow.password === inputHash){
+        data = loginRow; // 해시 일치
+      } else if(loginRow.password === password){
+        // 평문 → 해시로 자동 마이그레이션
+        await sb.from('users').update({password: inputHash}).eq('id', loginRow.id).catch(()=>{});
+        data = loginRow;
+      }
+    }
     if(!data){ showAuthError('login','아이디 또는 비밀번호가 올바르지 않아요.'); return; }
 
     // 관리자가 아닐 경우 현재 활성 회차에 속해있는지 + 기간 체크
@@ -154,6 +165,10 @@ $('#signupBtn').onclick = async ()=>{
   if(!username || !password || !nickname || !email || !code){
     showAuthError('signup','모든 항목을 입력해주세요.'); return;
   }
+  const privacyEl = document.getElementById('privacyCheck');
+  if(privacyEl && !privacyEl.checked){
+    showAuthError('signup','개인정보 수집 및 이용에 동의해주세요.'); return;
+  }
 
   $('#signupBtn').disabled = true;
   try{
@@ -165,13 +180,16 @@ $('#signupBtn').onclick = async ()=>{
     const today = todayKST();
     if(today > session.end_date){ showAuthError('signup','이번 회차는 이미 종료되었어요.'); return; }
 
+    // 비밀번호 해싱
+    const hashedPw = await sha256(password);
+
     // 기존 유저 확인 (재참여자)
     const { data: existing } = await sb.from('users').select('*').eq('username', username).maybeSingle();
 
     if(existing){
       // 재참여: 비번/닉네임/이메일 갱신 + 회차/일수/연속 초기화
       const { error } = await sb.from('users').update({
-        password, nickname, email,
+        password: hashedPw, nickname, email,
         current_session_id: session.id,
         current_day: 0,
         streak: 0,
@@ -183,7 +201,7 @@ $('#signupBtn').onclick = async ()=>{
       currentUser = refreshed;
     }else{
       const { data: created, error } = await sb.from('users').insert({
-        username, password, nickname, email,
+        username, password: hashedPw, nickname, email,
         current_session_id: session.id,
         current_day: 0, streak: 0, status:'active', is_admin:false
       }).select().single();
@@ -224,6 +242,12 @@ async function getActiveSession(){
   return data || null;
 }
 
+// SHA-256 해싱 (Web Crypto API)
+async function sha256(text){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
 /* ================== 로그인 후 초기화 ================== */
 async function afterLogin(){
   showScreen('home');
@@ -251,7 +275,7 @@ async function afterLogin(){
   setQuote();
   makeStars();
   updateDayChip();
-  setupWakeUI();
+  await setupWakeUI();
 
   if(!currentUser.is_admin){
     if($('#calendarSection')) $('#calendarSection').style.display='block';
@@ -340,7 +364,19 @@ function updateDayChip(){
 
 async function getTodayRecord(){
   const day = getCurrentDay();
-  return myRecords.find(r=>r.day===day) || null;
+  if(!currentUser || !currentSession) return myRecords.find(r=>r.day===day) || null;
+  try{
+    const { data, error } = await sb.from('daily_records')
+      .select('*').eq('user_id', currentUser.id).eq('session_id', currentSession.id).eq('day', day).maybeSingle();
+    if(!error && data){
+      // 캐시 동기화
+      const idx = myRecords.findIndex(r=>r.day===day);
+      if(idx>=0) myRecords[idx] = data; else myRecords.push(data);
+      return data;
+    }
+    if(!error && !data) return null; // 오늘 기록 없음
+  }catch(e){ console.error('getTodayRecord:', e); }
+  return myRecords.find(r=>r.day===day) || null; // fallback
 }
 
 async function setupWakeUI(){
@@ -1122,6 +1158,7 @@ async function renderAdmin(){
   await renderAdminPosts();
   await renderAdminAnnouncements();
   await renderAdminUserRecords();
+  await renderAdminPlants();
 }
 
 async function renderAdminSession(){
@@ -1382,7 +1419,8 @@ async function checkFailures(){
         }).select().single();
         if(!error){ myRecords.push(data); recordedDays.set(d, data); }
       }catch(e){ /* unique violation 등 무시 */ }
-    }else if(rec.status==='pending'){
+    }else if(rec.status==='pending' || rec.status==='woke'){
+      // 이전 날 pending/미완료 상태 → 실패 처리
       consecutiveMiss++;
       const newWilt = Math.min(3, consecutiveMiss);
       try{
@@ -1891,6 +1929,35 @@ $('#announceBannerClose').onclick = ()=>{
 };
 
 /* ================== 관리자 - 공지 ================== */
+async function renderAdminPlants(){
+  const themes = ['default','cactus','bamboo','cherry'];
+  const themeNames = {default:'🌳 나무',cactus:'🌵 선인장',bamboo:'🎋 대나무',cherry:'🌸 벚꽃'};
+  let html = '';
+  themes.forEach(theme=>{
+    html += `<div class="card" style="margin-bottom:14px">
+      <h2 style="margin-bottom:12px">${themeNames[theme]}</h2>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">
+        ${Array(21).fill(null).map((_,i)=>`
+          <div style="text-align:center">
+            <div>${miniPlantSVG(i,0,theme)}</div>
+            <div style="font-size:9px;color:var(--ink-soft);margin-top:2px">${i+1}일</div>
+          </div>`).join('')}
+      </div>
+      <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
+        <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;font-weight:600">시들기 단계</div>
+        <div style="display:flex;gap:12px">
+          ${[1,2,3].map(w=>`
+            <div style="text-align:center">
+              <div>${miniPlantSVG(10,w,theme)}</div>
+              <div style="font-size:9px;color:var(--rose);margin-top:2px">단계 ${w}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  });
+  $('#plantPreviewGrid').innerHTML = html;
+}
+
 async function renderAdminAnnouncements(){
   try{
     const { data } = await sb.from('announcements').select('*').order('created_at',{ascending:false});

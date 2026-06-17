@@ -70,7 +70,7 @@
   .field label{display:block;font-size:13px;font-weight:500;margin-bottom:7px;}
   input[type=text],input[type=password],input[type=email],input[type=date],textarea,select{
     width:100%;border:1.5px solid var(--line);border-radius:14px;padding:12px;
-    font-family:'Noto Sans KR';font-size:14px;background:#fff;color:var(--ink);
+    font-family:'Noto Sans KR';font-size:16px;background:#fff;color:var(--ink);
   }
   input:focus,textarea:focus,select:focus{outline:none;border-color:var(--sage);}
   .primary,.wake-btn,.verify-btn{
@@ -355,6 +355,15 @@
         <div class="field"><label>닉네임</label><input type="text" id="suNickname"></div>
         <div class="field"><label>이메일</label><input type="email" id="suEmail"></div>
         <div class="field"><label>참여 인증코드</label><input type="text" id="suCode" placeholder="운영자에게 받은 코드를 입력하세요"></div>
+        <div style="margin:12px 0;padding:12px;background:var(--cream);border-radius:12px;border:1.5px solid var(--line)">
+          <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">
+            <input type="checkbox" id="privacyCheck" style="width:18px;height:18px;flex-shrink:0;margin-top:2px;accent-color:var(--sage-deep)">
+            <span style="font-size:13px;line-height:1.6;color:var(--ink-soft)">
+              <b style="color:var(--ink)">개인정보 수집 및 이용 동의 (필수)</b><br>
+              아이디·닉네임·이메일은 챌린지 운영에만 사용되며, 챌린지 종료 후 모두 파기됩니다. 비밀번호는 암호화하여 저장합니다.
+            </span>
+          </label>
+        </div>
         <button class="primary" id="signupBtn">가입하고 시작하기</button>
         <div class="switch-link">이미 계정이 있으신가요? <a id="goLogin">로그인</a></div>
       </div>
@@ -568,6 +577,7 @@
       <button data-panel="adminPosts">피드 관리</button>
       <button data-panel="adminAnnouncements">공지</button>
       <button data-panel="adminUserRecords">회원 기록</button>
+      <button data-panel="adminPlants">식물 미리보기</button>
     </div>
 
     <!-- session -->
@@ -624,6 +634,11 @@
         </select>
       </div>
       <div id="userRecordList"></div>
+    </div>
+
+    <!-- plant preview -->
+    <div class="admin-panel" id="adminPlants">
+      <div id="plantPreviewGrid" style="padding:0 18px"></div>
     </div>
   </section>
 
