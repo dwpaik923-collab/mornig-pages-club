@@ -951,45 +951,186 @@ function plantSVG(stage, wilting, theme){
 
   // map 21 stages to visual groups
   let plant='';
-  if(stage===0){
-    plant=`<circle cx="100" cy="196" r="6" fill="#7a5a3a"/>`;
-  }else if(stage<=2){
-    const h = 176 + (2-stage)*4;
-    plant=`<path d="M100 198 V${h}" stroke="${c.trunk}" stroke-width="4" fill="none" stroke-linecap="round"/>
+
+  if(theme === 'bamboo'){
+    // 대나무: 마디가 있는 줄기 + 창형 잎
+    const jc = '#2d5c1a';
+    const stalk = (cx, yBase, segCount, segH) => {
+      let s = '';
+      for(let i = 0; i < segCount; i++){
+        const yBot = yBase - i * segH;
+        const yTop = yBot - segH + 5;
+        s += `<rect x="${cx-4}" y="${yTop}" width="8" height="${segH-5}" rx="2" fill="${c.trunk}"/>`;
+        s += `<rect x="${cx-6}" y="${yBot-4}" width="12" height="6" rx="3" fill="${jc}"/>`;
+      }
+      return s;
+    };
+    const leaf = (x, y, dir, len=22) => {
+      const ex = x + dir*len*0.85;
+      const ey = y - len*0.55;
+      const mx = x + dir*len*0.4;
+      const my = y - len*0.15;
+      return `<path d="M${x} ${y} Q${mx.toFixed(1)} ${my.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}" stroke="${c.leaf}" stroke-width="2.5" fill="none" stroke-linecap="round"/>`;
+    };
+
+    if(stage===0){
+      plant = `<circle cx="100" cy="196" r="6" fill="#7a5a3a"/>`;
+    }else if(stage<=2){
+      const segH = stage===1 ? 14 : 20;
+      plant = stalk(100, 197, 1, segH) + leaf(100, 197-segH*0.4, -1, 15);
+      if(stage===2) plant += leaf(100, 197-segH*0.75, 1, 18);
+    }else if(stage<=5){
+      const segH = 18 + (stage-3)*2;
+      const segs = stage<=4 ? 2 : 3;
+      plant = stalk(100, 197, segs, segH);
+      plant += leaf(100, 197-segH*0.55, -1, 20) + leaf(100, 197-segH*0.55, 1, 18);
+      plant += leaf(100, 197-segH*1.5, -1, 22) + leaf(100, 197-segH*1.5, 1, 20);
+      if(segs>2) plant += leaf(100, 197-segH*2.4, -1, 22) + leaf(100, 197-segH*2.4, 1, 20);
+    }else if(stage<=9){
+      const segH = 16;
+      const segs = 4 + (stage-6);
+      plant = stalk(100, 197, segs, segH);
+      for(let i=1; i<=segs; i++){
+        plant += leaf(100, 197-segH*i+segH*0.35, -1, 23);
+        if(i%2===0) plant += leaf(100, 197-segH*i+segH*0.35, 1, 21);
+      }
+    }else if(stage<=14){
+      const segH = 15;
+      const segs1 = 6 + Math.floor((stage-10)*0.6);
+      const segs2 = 4 + Math.floor((stage-10)*0.6);
+      plant = stalk(91, 197, segs1, segH) + stalk(111, 197, segs2, segH);
+      for(let i=1; i<=segs1; i++) plant += leaf(91, 197-segH*i+4, i%2===0?1:-1, 22);
+      for(let i=1; i<=segs2; i++) plant += leaf(111, 197-segH*i+4, i%2===0?-1:1, 20);
+    }else if(stage<=19){
+      const segH = 15;
+      plant = stalk(85, 197, 7, segH) + stalk(101, 200, 6, segH) + stalk(116, 197, 5, segH);
+      [[85,197,7],[101,200,6],[116,197,5]].forEach(([cx,base,segs]) => {
+        for(let i=1; i<segs; i++){
+          plant += leaf(cx, base-segH*i+4, i%2===0?1:-1, 23) + leaf(cx, base-segH*i+4, i%2===0?-1:1, 19);
+        }
+      });
+    }else{
+      // stage 20: 대나무 군락 만개
+      const segH = 15;
+      plant = stalk(83, 197, 8, segH) + stalk(99, 200, 8, segH) + stalk(115, 197, 7, segH);
+      [[83,197,8],[99,200,8],[115,197,7]].forEach(([cx,base,segs]) => {
+        for(let i=1; i<segs; i++){
+          plant += leaf(cx, base-segH*i+4, i%2===0?1:-1, 25) + leaf(cx, base-segH*i+4, i%2===0?-1:1, 21);
+        }
+      });
+    }
+
+  }else if(theme === 'cactus'){
+    // 선인장: 둥근 기둥 몸체 + 팔 + 가시 + 꽃
+    const spines = (cx, cy, count=6, r=12) => {
+      let s = '';
+      for(let i=0; i<count; i++){
+        const a = (i/count)*Math.PI*2 - Math.PI/2;
+        const sx = cx + Math.cos(a)*r*0.3, sy = cy + Math.sin(a)*r*0.3;
+        const ex = cx + Math.cos(a)*r, ey = cy + Math.sin(a)*r;
+        s += `<line x1="${sx.toFixed(1)}" y1="${sy.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}" stroke="#c8dba0" stroke-width="1.3" stroke-linecap="round"/>`;
+      }
+      return s;
+    };
+
+    if(stage===0){
+      plant = `<circle cx="100" cy="196" r="6" fill="#7a5a3a"/>`;
+    }else if(stage<=2){
+      const rw = 10+stage*3, rh = 10+stage*5;
+      plant = `<ellipse cx="100" cy="${197-rh}" rx="${rw}" ry="${rh}" fill="${c.trunk}"/>` +
+        spines(100, 197-rh*0.35, 5, 9);
+    }else if(stage<=5){
+      const h = 28+(stage-3)*7, w = 18;
+      plant = `<rect x="${100-w/2}" y="${197-h}" width="${w}" height="${h}" rx="${w/2}" fill="${c.trunk}"/>` +
+        spines(100, 197-h*0.75, 6, 11) + spines(100, 197-h*0.35, 5, 10);
+    }else if(stage<=9){
+      const h = 60+(stage-6)*8, w = 20;
+      plant = `<rect x="${100-w/2}" y="${197-h}" width="${w}" height="${h}" rx="${w/2}" fill="${c.trunk}"/>` +
+        spines(100, 197-h*0.85, 6, 12) + spines(100, 197-h*0.55, 6, 12) + spines(100, 197-h*0.28, 5, 11);
+    }else if(stage<=14){
+      const h = 95+(stage-10)*3, w = 22;
+      const armY = 197-h*0.55;
+      const armLen = (stage-10)*4+4;
+      plant = `<rect x="${100-w/2}" y="${197-h}" width="${w}" height="${h}" rx="${w/2}" fill="${c.trunk}"/>`;
+      if(stage>=11){
+        plant += `<path d="M${100-w/2+2} ${armY} q-${armLen} 2 -${armLen} -${(armLen*0.7).toFixed(0)}" stroke="${c.trunk}" stroke-width="15" fill="none" stroke-linecap="round"/>`;
+        plant += `<path d="M${100+w/2-2} ${armY} q${armLen} 2 ${armLen} -${(armLen*0.7).toFixed(0)}" stroke="${c.trunk}" stroke-width="15" fill="none" stroke-linecap="round"/>`;
+      }
+      plant += spines(100, 197-h*0.85, 6, 12) + spines(100, 197-h*0.55, 6, 12) + spines(100, 197-h*0.28, 5, 11);
+    }else if(stage<=19){
+      const h = 115+(stage-15)*2, w = 22;
+      const armY = 197-h*0.52;
+      const armW = 28+(stage-15)*4, armH = 22+(stage-15)*3;
+      plant = `<rect x="${100-w/2}" y="${197-h}" width="${w}" height="${h}" rx="${w/2}" fill="${c.trunk}"/>`;
+      plant += `<path d="M${100-w/2+2} ${armY} q-${armW} 2 -${armW} -${armH}" stroke="${c.trunk}" stroke-width="16" fill="none" stroke-linecap="round"/>`;
+      plant += `<path d="M${100+w/2-2} ${armY} q${armW} 2 ${armW} -${armH}" stroke="${c.trunk}" stroke-width="16" fill="none" stroke-linecap="round"/>`;
+      plant += spines(100, 197-h*0.85, 7, 12) + spines(100, 197-h*0.6, 7, 12) + spines(100, 197-h*0.35, 6, 11);
+      plant += spines(100-armW*0.6, armY-armH*0.5, 5, 10) + spines(100+armW*0.6, armY-armH*0.5, 5, 10);
+    }else{
+      // stage 20: 선인장 만개 + 꽃
+      const h = 130, w = 22;
+      const armY = 197-68, armW = 48, armH = 40;
+      plant = `<rect x="${100-w/2}" y="${197-h}" width="${w}" height="${h}" rx="${w/2}" fill="${c.trunk}"/>`;
+      plant += `<path d="M${100-w/2+2} ${armY} q-${armW} 2 -${armW} -${armH}" stroke="${c.trunk}" stroke-width="16" fill="none" stroke-linecap="round"/>`;
+      plant += `<path d="M${100+w/2-2} ${armY} q${armW} 2 ${armW} -${armH}" stroke="${c.trunk}" stroke-width="16" fill="none" stroke-linecap="round"/>`;
+      const addFlower = (fx, fy) => {
+        let fl = '';
+        for(let k=0; k<6; k++){
+          const a = k/6*Math.PI*2;
+          fl += `<ellipse cx="${(fx+Math.cos(a)*10).toFixed(1)}" cy="${(fy+Math.sin(a)*8).toFixed(1)}" rx="7" ry="4.5" fill="${c.flower}"/>`;
+        }
+        fl += `<circle cx="${fx}" cy="${fy}" r="6" fill="${c.center}"/>`;
+        return fl;
+      };
+      plant += addFlower(100, 197-h-6);
+      plant += addFlower(100-armW, armY-armH-3);
+      plant += addFlower(100+armW, armY-armH-3);
+      plant += spines(100, 197-h*0.85, 7, 12) + spines(100, 197-h*0.6, 7, 12) + spines(100, 197-h*0.35, 6, 11);
+      plant += spines(100-armW*0.55, armY-armH*0.5, 5, 10) + spines(100+armW*0.55, armY-armH*0.5, 5, 10);
+    }
+
+  }else{
+    // 기본(나무) & 벚꽃: 기존 트리 형태
+    if(stage===0){
+      plant=`<circle cx="100" cy="196" r="6" fill="#7a5a3a"/>`;
+    }else if(stage<=2){
+      const h = 176 + (2-stage)*4;
+      plant=`<path d="M100 198 V${h}" stroke="${c.trunk}" stroke-width="4" fill="none" stroke-linecap="round"/>
       <path d="M100 ${h+8} q-14 -6 -18 -18 q14 2 18 16" fill="${c.leaf}"/>`;
-  }else if(stage<=5){
-    const h = 168 - (stage-3)*6;
-    plant=`<path d="M100 198 V${h}" stroke="${c.trunk}" stroke-width="5" fill="none" stroke-linecap="round"/>
+    }else if(stage<=5){
+      const h = 168 - (stage-3)*6;
+      plant=`<path d="M100 198 V${h}" stroke="${c.trunk}" stroke-width="5" fill="none" stroke-linecap="round"/>
       <path d="M100 ${h+10} q-18 -6 -24 -22 q18 2 24 20z" fill="${c.leaf}"/>
       <path d="M100 ${h} q18 -6 24 -22 q-18 2 -24 20z" fill="${c.leaf2}"/>`;
-  }else if(stage<=9){
-    const h = 150 - (stage-6)*8;
-    plant=`<path d="M100 200 V${h}" stroke="${c.trunk}" stroke-width="7" fill="none" stroke-linecap="round"/>
+    }else if(stage<=9){
+      const h = 150 - (stage-6)*8;
+      plant=`<path d="M100 200 V${h}" stroke="${c.trunk}" stroke-width="7" fill="none" stroke-linecap="round"/>
       <path d="M100 ${h+18} q-26 -8 -34 -30 q26 4 34 28z" fill="${c.leaf}"/>
       <path d="M100 ${h+6} q26 -8 34 -30 q-26 4 -34 28z" fill="${c.leaf2}"/>
       <circle cx="100" cy="${h-4}" r="${18+(stage-6)}" fill="${c.leaf2}"/>`;
-  }else if(stage<=14){
-    const r = 38 + (stage-10)*2;
-    plant=`<path d="M100 202 V120" stroke="${c.trunk}" stroke-width="9" fill="none" stroke-linecap="round"/>
+    }else if(stage<=14){
+      const r = 38 + (stage-10)*2;
+      plant=`<path d="M100 202 V120" stroke="${c.trunk}" stroke-width="9" fill="none" stroke-linecap="round"/>
       <circle cx="100" cy="100" r="${r}" fill="${c.leaf}"/>
       <circle cx="${100-r*0.7}" cy="120" r="${r*0.65}" fill="${c.leaf2}"/>
       <circle cx="${100+r*0.7}" cy="120" r="${r*0.65}" fill="${c.leaf2}"/>`;
-  }else if(stage<=19){
-    const r = 44 + (stage-15);
-    plant=`<path d="M100 204 V116" stroke="${c.trunk}" stroke-width="11" fill="none" stroke-linecap="round"/>
+    }else if(stage<=19){
+      const r = 44 + (stage-15);
+      plant=`<path d="M100 204 V116" stroke="${c.trunk}" stroke-width="11" fill="none" stroke-linecap="round"/>
       <circle cx="100" cy="92" r="${r}" fill="${c.leaf}"/>
       <circle cx="${100-r*0.75}" cy="116" r="${r*0.65}" fill="${c.leaf}"/>
       <circle cx="${100+r*0.75}" cy="116" r="${r*0.65}" fill="${c.leaf2}"/>
       <circle cx="100" cy="118" r="${r*0.74}" fill="${c.leaf2}"/>`;
-  }else{
-    // stage 20: full bloom
-    plant=`<path d="M100 206 V112" stroke="${c.trunk}" stroke-width="12" fill="none" stroke-linecap="round"/>
+    }else{
+      // stage 20: full bloom
+      plant=`<path d="M100 206 V112" stroke="${c.trunk}" stroke-width="12" fill="none" stroke-linecap="round"/>
       <circle cx="100" cy="86" r="50" fill="${c.leaf}"/>
       <circle cx="60" cy="114" r="32" fill="${c.leaf}"/>
       <circle cx="140" cy="114" r="32" fill="${c.leaf2}"/>
       <circle cx="100" cy="116" r="38" fill="${c.leaf2}"/>
       ${[...Array(7)].map((_,k)=>{const a=k/7*6.28;return `<circle cx="${100+Math.cos(a)*42}" cy="${100+Math.sin(a)*36}" r="6" fill="${c.flower}"/>`}).join('')}
       <circle cx="100" cy="100" r="9" fill="${c.center}"/>`;
+    }
   }
   return `<svg width="200" height="220" viewBox="0 0 200 220">${pot}${soil}${plant}</svg>`;
 }
