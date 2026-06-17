@@ -931,19 +931,15 @@ function plantSVG(stage, wilting, theme){
   stage = Math.max(0, Math.min(PLANT_STAGE_COUNT-1, stage));
   theme = theme || 'default';
 
-  // 시들기 + 테마 색상
+  // 시들기: 1단계 이전 성장 단계로 표시 (색상 변화 없음)
   const base = PLANT_PALETTES[theme] || PLANT_PALETTES.default;
-  const wiltFactor = (wilting||0) / 3; // 0~1
-  function wiltColor(hex){
-    // 시들수록 채도 낮추고 밝기 높임
-    return wiltFactor > 0 ? `color-mix(in srgb, ${hex}, #c8b89a ${Math.round(wiltFactor*50)}%)` : hex;
-  }
+  if(wilting > 0) stage = Math.max(0, stage - 1);
   const c = {
-    leaf:   wiltColor(base.leaf),
-    leaf2:  wiltColor(base.leaf2),
+    leaf:   base.leaf,
+    leaf2:  base.leaf2,
     trunk:  base.trunk,
-    flower: wiltColor(base.flower),
-    center: wiltColor(base.center),
+    flower: base.flower,
+    center: base.center,
   };
 
   const pot=`<rect x="62" y="170" width="76" height="42" rx="6" fill="#c98a63"/><rect x="58" y="164" width="84" height="14" rx="5" fill="#d99a73"/>`;
@@ -2077,20 +2073,12 @@ async function renderAdminPlants(){
   themes.forEach(theme=>{
     html += `<div class="card" style="margin-bottom:14px">
       <h2 style="margin-bottom:12px">${themeNames[theme]}</h2>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">
-        ${Array(21).fill(null).map((_,i)=>`
-          <div style="text-align:center">
-            <div>${miniPlantSVG(i,0,theme)}</div>
-            <div style="font-size:9px;color:var(--ink-soft);margin-top:2px">${i+1}일</div>
-          </div>`).join('')}
-      </div>
-      <div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
-        <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px;font-weight:600">시들기 단계</div>
-        <div style="display:flex;gap:12px">
-          ${[1,2,3].map(w=>`
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+        <div style="display:grid;grid-template-columns:repeat(7,60px);gap:6px;min-width:450px">
+          ${Array(21).fill(null).map((_,i)=>`
             <div style="text-align:center">
-              <div>${miniPlantSVG(10,w,theme)}</div>
-              <div style="font-size:9px;color:var(--rose);margin-top:2px">단계 ${w}</div>
+              <div>${miniPlantSVG(i,0,theme)}</div>
+              <div style="font-size:9px;color:var(--ink-soft);margin-top:2px">${i+1}일</div>
             </div>`).join('')}
         </div>
       </div>
