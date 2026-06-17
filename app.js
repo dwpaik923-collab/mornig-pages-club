@@ -235,7 +235,6 @@ $('#logoutBtn').onclick = ()=>{
   $('#loginCard').style.display='block';
   $('#signupCard').style.display='none';
   $('#loginUsername').value=''; $('#loginPassword').value='';
-  $('#app').style.display='block';
 };
 
 async function getActiveSession(){
@@ -502,7 +501,7 @@ function startGoldenTimer(record){
 
   // woke_at이 24시간보다 오래됐으면 (비정상 기록) auto-fail
   if(Date.now() - wokeAt > 24*60*60*1000){
-    sb.from('daily_records').update({status:'failed', wilting_level:1}).eq('id', record.id).then(()=>{});
+    await sb.from('daily_records').update({status:'failed', wilting_level:1}).eq('id', record.id);
     $('#wakeCard').style.display='block';
     $('#wakeBtn').disabled = true;
     $('#wakeBtn').textContent = '오늘은 인증 실패예요 🌧️';
@@ -625,7 +624,7 @@ $('#submitBtn').onclick = async ()=>{
   try{
     const day = getCurrentDay();
     const record = await getTodayRecord();
-    if(!record){ toast('먼저 기상 버튼을 눌러주세요.'); return; }
+    if(!record){ toast('먼저 기상 버튼을 눌러주세요.'); $('#submitBtn').disabled=false; $('#submitBtn').textContent='인증 완료하기'; return; }
 
     // 이미지 업로드
     const imageUrls = [];
@@ -644,8 +643,9 @@ $('#submitBtn').onclick = async ()=>{
     });
     if(postErr) throw postErr;
 
-    // record 업데이트
-    const newStreak = (currentUser.streak||0) + 1;
+    // record 업데이트 - DB에서 최신 streak 가져와서 증가
+    const { data: freshUser } = await sb.from('users').select('streak').eq('id', currentUser.id).single();
+    const newStreak = ((freshUser && freshUser.streak)||0) + 1;
     const newDay = Math.max(currentUser.current_day||0, day);
     const wilting = 0; // 인증 성공시 시들기 초기화(복구)
 
@@ -847,6 +847,7 @@ async function toggleLike(btn){
     if(isOn){
       await sb.from('likes').delete().eq('user_id', currentUser.id).eq('post_id', postId);
       const { data: post } = await sb.from('posts').select('likes_count').eq('id', postId).single();
+      if(!post) return;
       const newCount = Math.max(0,(post.likes_count||0)-1);
       await sb.from('posts').update({likes_count:newCount}).eq('id', postId);
       btn.classList.remove('on');
@@ -855,6 +856,7 @@ async function toggleLike(btn){
     }else{
       await sb.from('likes').insert({user_id:currentUser.id, post_id:postId});
       const { data: post } = await sb.from('posts').select('likes_count').eq('id', postId).single();
+      if(!post) return;
       const newCount = (post.likes_count||0)+1;
       await sb.from('posts').update({likes_count:newCount}).eq('id', postId);
       btn.classList.add('on');
@@ -1434,13 +1436,16 @@ async function renderAdminQuotes(){
   $$('#quoteList [data-edit-q]').forEach(b=>b.onclick=()=>startEditQuote(b.dataset.editQ));
 
   $$('#quoteList [data-toggle-q]').forEach(b=>b.onclick=async()=>{
-    const q = allQuotes.find(x=>x.id===b.dataset.toggleQ);
-    await sb.from('quotes').update({is_active: !q.is_active}).eq('id', q.id);
+    const q = allQuotes.find(x=>String(x.id)===String(b.dataset.toggleQ));
+    if(!q){ toast('명언을 찾을 수 없어요.'); return; }
+    const { error } = await sb.from('quotes').update({is_active: !q.is_active}).eq('id', q.id);
+    if(error){ toast('오류: '+error.message); return; }
     await renderAdminQuotes();
   });
   $$('#quoteList [data-del-q]').forEach(b=>b.onclick=async()=>{
     if(!confirm('이 명언을 삭제할까요?')) return;
-    await sb.from('quotes').delete().eq('id', b.dataset.delQ);
+    const { error } = await sb.from('quotes').delete().eq('id', b.dataset.delQ);
+    if(error){ toast('삭제 오류: '+error.message); return; }
     await renderAdminQuotes();
   });
   $$('#quoteList [data-up]').forEach(b=>b.onclick=()=>moveQuote(b.dataset.up, -1));
@@ -1531,7 +1536,9 @@ async function renderAdminPosts(){
 
   $$('#adminPostList [data-del-post]').forEach(b=>b.onclick=async()=>{
     if(!confirm('이 게시물을 삭제할까요?')) return;
-    await sb.from('posts').delete().eq('id', b.dataset.delPost);
+    const { error } = await sb.from('posts').delete().eq('id', b.dataset.delPost);
+    if(error){ toast('삭제 오류: '+error.message); return; }
+    toast('게시물을 삭제했어요.');
     await renderAdminPosts();
   });
 }
@@ -1566,7 +1573,7 @@ async function checkFailures(){
         if(!error){ rec.status='failed'; rec.wilting_level=newWilt; }
       }catch(e){ console.error(e); }
     }else if(rec.status==='failed'){
-      consecutiveMiss = Math.max(consecutiveMiss+1, rec.wilting_level||1);
+      consecutiveMiss++;
     }else if(rec.status==='success'){
       consecutiveMiss = 0;
     }
@@ -2109,13 +2116,15 @@ async function renderAdminAnnouncements(){
       </div>`).join('');
     $$('#announcementList [data-toggle-ann]').forEach(b=>b.onclick=async()=>{
       const isActive = b.dataset.annActive==='true';
-      await sb.from('announcements').update({is_active:!isActive}).eq('id',b.dataset.toggleAnn);
+      const { error: annToggleErr } = await sb.from('announcements').update({is_active:!isActive}).eq('id',b.dataset.toggleAnn);
+      if(annToggleErr){ toast('오류: '+annToggleErr.message); return; }
       toast(isActive?'공지를 비활성화했어요.':'공지를 활성화했어요.');
       await renderAdminAnnouncements();
     });
     $$('#announcementList [data-del-ann]').forEach(b=>b.onclick=async()=>{
       if(!confirm('이 공지를 삭제할까요?')) return;
-      await sb.from('announcements').delete().eq('id',b.dataset.delAnn);
+      const { error: annDelErr } = await sb.from('announcements').delete().eq('id',b.dataset.delAnn);
+      if(annDelErr){ toast('삭제 오류: '+annDelErr.message); return; }
       toast('공지를 삭제했어요.');
       await renderAdminAnnouncements();
     });
