@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gmpc-cache-v7';
+const CACHE_NAME = 'gmpc-cache-v8';
 const STATIC_ASSETS = [
   './icon-192.png',
   './icon-512.png',

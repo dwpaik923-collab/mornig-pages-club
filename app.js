@@ -2052,7 +2052,7 @@ async function renderReceivedCheers(){
     const names = Object.entries(nameMap).map(([n,cnt])=>cnt>1?`${n}(${cnt})`:`${n}`);
     const msg = names.length===1
       ? `🔥 ${names[0]}님이 응원했어요!`
-      : `🔥 ${names.slice(0,-1).join(', ')}, ${names.at(-1)}님이 응원했어요!`;
+      : `🔥 ${names.slice(0,-1).join(', ')}, ${names[names.length-1]}님이 응원했어요!`;
     toast(msg);
   }catch(e){ /* cheers 테이블 없을 수도 있음 */ }
 }
@@ -2073,14 +2073,6 @@ async function toggleCheer(btn){
         from_nickname: currentUser.nickname
       });
       toast('🔥 응원을 보냈어요!');
-      // 받는 사람 푸시 알림 시도 (구독 있을 때만)
-      if(post?.user_id && post.user_id !== currentUser.id){
-        fetch('https://lztzqqijllczwoojubsf.supabase.co/functions/v1/send-cheer-push', {
-          method:'POST',
-          headers:{'Content-Type':'application/json','Authorization':'Bearer sb_publishable_4LWywzGz5JnXFmoNG3N8tw_IZbow1SP'},
-          body: JSON.stringify({ to_user_id: post.user_id, from_nickname: currentUser.nickname })
-        }).catch(()=>{});
-      }
     }
     await renderFeed();
 
