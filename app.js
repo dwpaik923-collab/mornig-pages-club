@@ -2038,30 +2038,22 @@ async function checkPerfectDay(users, successIds){
 async function renderReceivedCheers(){
   if(!currentUser || currentUser.is_admin) return;
   try{
+    const lastCheck = store.get('mpc_cheer_check_' + currentUser.id) || '2000-01-01T00:00:00Z';
     const { data: cheers } = await sb.from('cheers')
-      .select('from_nickname, post_id, created_at')
+      .select('from_nickname, created_at')
       .eq('to_user_id', currentUser.id)
+      .gt('created_at', lastCheck)
       .order('created_at', {ascending:false})
       .limit(10);
-    const card = $('#homeCheerCard');
-    if(!card) return;
-    if(!cheers || !cheers.length){ card.style.display='none'; return; }
-
-    // 오늘 KST 기준으로 필터 (없으면 최근 3개)
-    const todayStr = todayKST();
-    const todayCheers = cheers.filter(c => c.created_at && c.created_at.slice(0,10) === todayStr);
-    const display = todayCheers.length ? todayCheers : cheers.slice(0,3);
-
-    // 닉네임별 묶기
+    store.set('mpc_cheer_check_' + currentUser.id, new Date().toISOString());
+    if(!cheers || !cheers.length) return;
     const nameMap = {};
-    display.forEach(c => {
-      const n = c.from_nickname || '익명';
-      nameMap[n] = (nameMap[n]||0) + 1;
-    });
-    const names = Object.entries(nameMap).map(([n,cnt]) => cnt>1 ? `${n}(${cnt})` : n);
-
-    $('#homeCheerList').innerHTML = `<div style="font-size:14px;line-height:1.7">🔥 <b>${names.join(', ')}</b>님이 응원했어요!</div>`;
-    card.style.display = 'block';
+    cheers.forEach(c => { const n = c.from_nickname||'익명'; nameMap[n]=(nameMap[n]||0)+1; });
+    const names = Object.entries(nameMap).map(([n,cnt])=>cnt>1?`${n}(${cnt})`:`${n}`);
+    const msg = names.length===1
+      ? `🔥 ${names[0]}님이 응원했어요!`
+      : `🔥 ${names.slice(0,-1).join(', ')}, ${names.at(-1)}님이 응원했어요!`;
+    toast(msg);
   }catch(e){ /* cheers 테이블 없을 수도 있음 */ }
 }
 
@@ -2091,8 +2083,7 @@ async function toggleCheer(btn){
       }
     }
     await renderFeed();
-    // 내가 받은 응원 카드도 갱신 (홈에 있을 경우)
-    if(document.getElementById('homeCheerCard')) await renderReceivedCheers();
+
   }catch(e){ toast('응원 오류: ' + e.message); }
 }
 
