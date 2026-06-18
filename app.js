@@ -2611,22 +2611,22 @@ async function renderAdminCompletion(){
   if(!currentSession){ return; }
   const { data: allRecs } = await sb.from('daily_records').select('*').eq('session_id', currentSession.id);
   const { data: users } = await sb.from('users').select('id,nickname,plant_theme').eq('current_session_id', currentSession.id).eq('is_admin',false);
-  // 21일 완주한 유저만
   const recsByUser={};
   (allRecs||[]).forEach(r=>{ if(!recsByUser[r.user_id]) recsByUser[r.user_id]=[]; recsByUser[r.user_id].push(r); });
-  const completedUsers=(users||[]).filter(u=>{
-    const recs=recsByUser[u.id]||[];
-    return recs.filter(r=>r.status==='success'||r.status==='passed').length>=21;
-  });
+  const allUsers = users||[];
   const sel=$('#completionUserSelect');
-  sel.innerHTML='<option value="">완주 회원을 선택하세요</option>';
-  completedUsers.forEach(u=>{ sel.innerHTML+=`<option value="${u.id}">${escapeHtml(u.nickname)}</option>`; });
+  sel.innerHTML='<option value="">회원을 선택하세요</option>';
+  allUsers.forEach(u=>{
+    const cnt=(recsByUser[u.id]||[]).filter(r=>r.status==='success'||r.status==='passed').length;
+    sel.innerHTML+=`<option value="${u.id}">${escapeHtml(u.nickname)} (${cnt}일)</option>`;
+  });
 
   sel.onchange = async ()=>{
     const uid=sel.value; if(!uid) return;
-    const u=completedUsers.find(x=>x.id===uid);
+    const u=allUsers.find(x=>x.id===uid);
     const recs=recsByUser[uid]||[];
-    const { data: cap } = await sb.from('time_capsules').select('*').eq('user_id',uid).eq('session_id',currentSession.id).single().catch(()=>({data:null}));
+    let cap=null;
+    try{ const { data } = await sb.from('time_capsules').select('*').eq('user_id',uid).eq('session_id',currentSession.id).single(); cap=data; }catch(_){}
     const canvas=$('#adminCompletionCanvas');
     canvas.style.display='block';
     await drawCompletionCanvas(canvas, recs, u, currentSession, cap, u.plant_theme||'default');
