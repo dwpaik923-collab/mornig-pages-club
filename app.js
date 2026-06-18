@@ -795,7 +795,9 @@ async function renderFeed(){
 
     let imgsHtml;
     if(p.images && p.images.length){
-      imgsHtml = `<div class="post-imgs">${p.images.map(src=>`<img src="${src}" loading="lazy">`).join('')}</div>`;
+      const imgs1 = p.images.map(src=>`<img src="${src}" loading="lazy">`).join('');
+      const counter1 = p.images.length > 1 ? `<div class="post-imgs-counter">1 / ${p.images.length}</div>` : '';
+      imgsHtml = `<div class="post-imgs-wrap"><div class="post-imgs" data-total="${p.images.length}">${imgs1}</div>${counter1}</div>`;
     }else{
       imgsHtml = `<div class="post-img placeholder">오늘의 세 페이지 ✍️</div>`;
     }
@@ -826,6 +828,20 @@ async function renderFeed(){
   $$('#postList [data-like]').forEach(b=>b.onclick=()=>toggleLike(b));
   $$('#postList [data-post-cheer]').forEach(b=>b.onclick=()=>toggleCheer(b));
   $$('#postList [data-comment]').forEach(b=>b.onclick=()=>openComments(b.dataset.comment));
+  bindImgCounters('#postList');
+}
+
+function bindImgCounters(scope){
+  $$(scope + ' .post-imgs[data-total]').forEach(el=>{
+    const total = parseInt(el.dataset.total);
+    if(total < 2) return;
+    const counter = el.parentElement.querySelector('.post-imgs-counter');
+    if(!counter) return;
+    el.addEventListener('scroll', ()=>{
+      const idx = Math.round(el.scrollLeft / el.offsetWidth) + 1;
+      counter.textContent = idx + ' / ' + total;
+    }, {passive:true});
+  });
 }
 
 function hashCode(str){
@@ -1204,7 +1220,14 @@ function showPostDetail(postId){
   const p = myPosts.find(x=>x.id===postId);
   if(!p) return;
   const wokeTime = p.woke_at ? kstTimeStr(p.woke_at) : '-';
-  let imgsHtml = (p.images&&p.images.length) ? `<div class="post-imgs">${p.images.map(src=>`<img src="${src}">`).join('')}</div>` : `<div class="post-img placeholder">오늘의 세 페이지 ✍️</div>`;
+  let imgsHtml;
+  if(p.images && p.images.length){
+    const imgs2 = p.images.map(src=>`<img src="${src}">`).join('');
+    const counter2 = p.images.length > 1 ? `<div class="post-imgs-counter">1 / ${p.images.length}</div>` : '';
+    imgsHtml = `<div class="post-imgs-wrap"><div class="post-imgs" data-total="${p.images.length}">${imgs2}</div>${counter2}</div>`;
+  } else {
+    imgsHtml = `<div class="post-img placeholder">오늘의 세 페이지 ✍️</div>`;
+  }
   $('#detailSheet').innerHTML = `
     <h2>${p.day}일차 ${p.mood||''} ${p.is_private?'<span class="badge-private" style="margin-left:6px">🔒 비공개</span>':''}</h2>
     <p class="sub" style="margin-bottom:12px">기상 ${wokeTime} · ${kstDateStr(p.created_at)}</p>
@@ -1214,6 +1237,7 @@ function showPostDetail(postId){
   `;
   $('#detailOverlay').classList.add('show');
   $('#closeDetailBtn').onclick = ()=>$('#detailOverlay').classList.remove('show');
+  bindImgCounters('#detailSheet');
 }
 $('#detailOverlay').addEventListener('click', e=>{ if(e.target.id==='detailOverlay') $('#detailOverlay').classList.remove('show'); });
 

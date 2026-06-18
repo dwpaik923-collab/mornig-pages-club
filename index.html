@@ -138,6 +138,8 @@
   }
   .pwa-btn:hover{background:rgba(255,255,255,.25);}
   .pwa-btn.active{background:rgba(255,255,255,.38);border-color:rgba(255,255,255,.85);font-weight:700;}
+  #pwaBtn{background:var(--paper-2);border-color:var(--line);color:var(--ink);}
+  #pwaBtn:hover{background:var(--paper);}
 
   .card{background:var(--paper);margin:18px;border-radius:22px;padding:22px;box-shadow:var(--shadow);}
   .card h2{font-family:'Gowun Batang',serif;font-size:19px;margin-bottom:4px;}
@@ -169,9 +171,11 @@
   .post-top .name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;}
   .post-top .meta{font-size:12px;color:var(--ink-soft);}
   .post-top .mood{margin-left:auto;font-size:22px;}
-  .post-imgs{display:grid;grid-auto-flow:column;grid-auto-columns:100%;gap:0;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;}
+  .post-imgs-wrap{position:relative;}
+  .post-imgs{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
   .post-imgs::-webkit-scrollbar{display:none;}
-  .post-imgs img{width:100%;aspect-ratio:1/1;object-fit:cover;background:var(--paper-2);display:block;scroll-snap-align:start;border-radius:0;}
+  .post-imgs img{flex:0 0 100%;width:100%;aspect-ratio:1/1;object-fit:cover;background:var(--paper-2);display:block;scroll-snap-align:start;border-radius:0;}
+  .post-imgs-counter{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.45);color:#fff;font-size:12px;font-weight:600;padding:3px 9px;border-radius:20px;pointer-events:none;}
   .post-img.placeholder{display:flex;align-items:center;justify-content:center;color:var(--ink-soft);font-family:'Nanum Pen Script';font-size:30px;background:repeating-linear-gradient(180deg,#fbf7f0,#fbf7f0 27px,#e9e0d0 28px);aspect-ratio:1/1;}
   .post-body{padding:12px 16px 16px;}
   .post-note{font-size:14px;margin-bottom:10px;white-space:pre-wrap;}
