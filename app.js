@@ -82,7 +82,10 @@ $$('.nav button').forEach(b=>{
   b.onclick = async ()=>{
     setActiveNav(b.dataset.screen);
     showScreen(b.dataset.screen);
-    if(b.dataset.screen==='home' && currentUser && !currentUser.is_admin) await loadAnnouncement();
+    if(b.dataset.screen==='home' && currentUser && !currentUser.is_admin){
+      await loadAnnouncement();
+      checkCapsulePopup();
+    }
     if(b.dataset.screen==='feed') await renderFeed();
     if(b.dataset.screen==='garden') await renderGarden();
     if(b.dataset.screen==='dash') await renderDash();
@@ -286,6 +289,7 @@ async function afterLogin(){
     if($('#calendarSection')) $('#calendarSection').style.display='none';
   }
   // 자동 푸시 구독 비활성화 (알림 진단에서 수동으로만 구독)
+  if(!currentUser.is_admin){ await loadCapsule(); checkCapsulePopup(); }
 }
 
 async function loadMyData(){
@@ -670,6 +674,13 @@ $('#submitBtn').onclick = async ()=>{
     await renderHomeCards();
 
     showCelebration(newStreak);
+    // 21일 완주 시 리포트 팝업
+    if(day === TOTAL_DAYS){
+      setTimeout(async ()=>{
+        await loadCapsule();
+        await showCompletionReport();
+      }, 3500);
+    }
   }catch(e){
     console.error(e);
     toast('인증 중 오류: ' + (e.message || e.error_description || '알 수 없는 오류'));
@@ -1324,6 +1335,8 @@ async function renderAdmin(){
   await renderAdminAnnouncements();
   await renderAdminUserRecords();
   await renderAdminPlants();
+  await renderAdminCapsules();
+  await renderAdminCompletion();
 }
 
 async function renderAdminSession(){
@@ -2396,3 +2409,228 @@ if('serviceWorker' in navigator){
 }
 
 init();
+
+/* ================== 타임캡슐 ================== */
+let currentUserCapsule = null;
+
+async function loadCapsule(){
+  if(!currentUser || currentUser.is_admin || !currentSession) return;
+  try{
+    const { data } = await sb.from('time_capsules')
+      .select('*').eq('user_id', currentUser.id).eq('session_id', currentSession.id).single();
+    currentUserCapsule = data || null;
+  }catch(e){ currentUserCapsule = null; }
+}
+
+function checkCapsulePopup(){
+  if(!currentUser || currentUser.is_admin) return;
+  if(currentUserCapsule) return;
+  setTimeout(()=>{ $('#capsuleOverlay').classList.add('show'); }, 700);
+}
+
+$('#capsuleSendBtn').onclick = async ()=>{
+  const content = $('#capsuleText').value.trim();
+  if(!content){ toast('편지 내용을 입력해주세요 ✍️'); return; }
+  try{
+    const { data, error } = await sb.from('time_capsules').insert({
+      user_id: currentUser.id, session_id: currentSession?.id, content
+    }).select().single();
+    if(error) throw error;
+    currentUserCapsule = data;
+    $('#capsuleOverlay').classList.remove('show');
+    toast('💌 봉인됐어요! 21일 완주 후 열립니다.');
+  }catch(e){ toast('저장 중 오류: ' + e.message); }
+};
+
+$('#capsuleLaterBtn').onclick = ()=>{ $('#capsuleOverlay').classList.remove('show'); };
+
+/* ================== 완주 리포트 ================== */
+function _roundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+  ctx.arcTo(x+w,y,x+w,y+r,r); ctx.lineTo(x+w,y+h-r);
+  ctx.arcTo(x+w,y+h,x+w-r,y+h,r); ctx.lineTo(x+r,y+h);
+  ctx.arcTo(x,y+h,x,y+h-r,r); ctx.lineTo(x,y+r);
+  ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
+}
+
+async function drawCompletionCanvas(canvas, records, user, session, capsule, plantTheme){
+  const W=540, H=800;
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext('2d');
+
+  // 배경
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#1b1f3b'); grad.addColorStop(0.38,'#3d3a6b');
+  grad.addColorStop(0.72,'#e98a7d'); grad.addColorStop(1,'#f6b083');
+  ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
+
+  // 별
+  ctx.fillStyle='rgba(255,255,255,0.55)';
+  for(let i=0;i<28;i++){
+    ctx.beginPath();
+    ctx.arc((Math.sin(i*137.5)*0.5+0.5)*W,(Math.cos(i*97.3)*0.4+0.15)*H,Math.random()*2+0.5,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // 헤더
+  ctx.textAlign='center';
+  ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.font='bold 17px sans-serif';
+  ctx.fillText('GOOD MORNING PAGE CLUB', W/2, 52);
+  ctx.fillStyle='#ffce7a'; ctx.font='bold 38px serif';
+  ctx.fillText('21일 완주 🏆', W/2, 97);
+  ctx.fillStyle='#fff'; ctx.font='bold 24px sans-serif';
+  ctx.fillText(user.nickname, W/2, 132);
+
+  // 식물
+  const svgStr=plantSVG(20,0,plantTheme||'default');
+  const svgBlob=new Blob([svgStr],{type:'image/svg+xml'});
+  const svgUrl=URL.createObjectURL(svgBlob);
+  await new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{ ctx.drawImage(img,W/2-105,145,210,231); URL.revokeObjectURL(svgUrl); res(); };
+    img.onerror=res; img.src=svgUrl;
+  });
+
+  // 통계 계산
+  const successRecs=records.filter(r=>r.status==='success'&&r.woke_at);
+  const completedCount=records.filter(r=>r.status==='success'||r.status==='passed').length;
+  let avgWakeStr='-';
+  if(successRecs.length>0){
+    const total=successRecs.reduce((s,r)=>{ const d=parseUTC(r.woke_at); return s+d.getHours()*60+d.getMinutes(); },0);
+    const a=total/successRecs.length, h=Math.floor(a/60), m=Math.round(a%60);
+    avgWakeStr=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  }
+  let fastestStr='-';
+  let fastestMins=Infinity;
+  successRecs.forEach(r=>{ const d=parseUTC(r.woke_at); const m=d.getHours()*60+d.getMinutes(); if(m<fastestMins){fastestMins=m; fastestStr=kstTimeStr(r.woke_at);} });
+  let maxStreak=0,cur=0;
+  for(let d=1;d<=21;d++){
+    const rec=records.find(r=>r.day===d);
+    if(rec&&(rec.status==='success'||rec.status==='passed')) cur++; else cur=0;
+    maxStreak=Math.max(maxStreak,cur);
+  }
+
+  // 통계 박스
+  ctx.fillStyle='rgba(255,255,255,0.11)';
+  _roundRect(ctx,36,392,W-72,108,14); ctx.fill();
+  const stats=[['인증 일수',completedCount+'일'],['평균 기상',avgWakeStr],['최고 연속',maxStreak+'일'],['최단 기상',fastestStr]];
+  const cellW=(W-72)/4;
+  stats.forEach(([label,val],i)=>{
+    const cx=36+cellW*i+cellW/2;
+    ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.font='12px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(label,cx,420);
+    ctx.fillStyle='#fff'; ctx.font='bold 20px sans-serif';
+    ctx.fillText(val,cx,448);
+  });
+
+  // 감정 도넛
+  const moodColors={'🌞':'#ffce7a','🙂':'#8ba888','😐':'#a0a0c0','😮‍💨':'#e9b97d','🌧️':'#e98a7d'};
+  const moodCounts={};
+  records.forEach(r=>{ if(r.mood) moodCounts[r.mood]=(moodCounts[r.mood]||0)+1; });
+  const moodEntries=Object.entries(moodCounts).sort((a,b)=>b[1]-a[1]);
+  const moodTotal=moodEntries.reduce((s,[,c])=>s+c,0);
+  if(moodTotal>0){
+    const cx=W/2, cy=590, r=58;
+    let ang=-Math.PI/2;
+    moodEntries.forEach(([mood,count])=>{
+      const a=(count/moodTotal)*Math.PI*2;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,ang,ang+a); ctx.closePath();
+      ctx.fillStyle=moodColors[mood]||'#ccc'; ctx.fill(); ang+=a;
+    });
+    // 도넛 구멍
+    ctx.beginPath(); ctx.arc(cx,cy,r*0.54,0,Math.PI*2);
+    const hg=ctx.createRadialGradient(cx,cy,0,cx,cy,r*0.54);
+    hg.addColorStop(0,'rgba(75,65,115,0.95)'); hg.addColorStop(1,'rgba(75,65,115,0.95)');
+    ctx.fillStyle=hg; ctx.fill();
+    ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('감정', cx, cy-4); ctx.font='12px sans-serif';
+    ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.fillText('분포', cx, cy+14);
+    // 범례
+    const legW=moodEntries.length*52, legStartX=W/2-legW/2+10;
+    moodEntries.forEach(([mood],i)=>{
+      const lx=legStartX+i*52;
+      ctx.fillStyle=moodColors[mood]||'#ccc';
+      ctx.beginPath(); ctx.arc(lx,672,5,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.font='15px sans-serif'; ctx.textAlign='center';
+      ctx.fillText(mood,lx,695);
+    });
+  }
+
+  // 워터마크
+  ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.font='13px sans-serif';
+  ctx.fillText('goodmorningpageclub', W/2, 768);
+
+  return ctx;
+}
+
+async function showCompletionReport(){
+  const canvas=$('#completionCanvas');
+  await drawCompletionCanvas(canvas, myRecords, currentUser, currentSession, currentUserCapsule, currentPlantTheme);
+
+  if(currentUserCapsule){
+    $('#completionCapsuleSection').style.display='block';
+    $('#completionCapsuleText').textContent=currentUserCapsule.content;
+  } else {
+    $('#completionCapsuleSection').style.display='none';
+  }
+  $('#completionOverlay').classList.add('show');
+}
+
+$('#completionShareBtn').onclick=()=>{
+  const canvas=$('#completionCanvas');
+  const a=document.createElement('a');
+  a.href=canvas.toDataURL('image/png');
+  a.download=`GMPC_완주리포트_${currentUser?.nickname||'me'}.png`;
+  a.click();
+};
+$('#completionCloseBtn').onclick=()=>{ $('#completionOverlay').classList.remove('show'); };
+
+/* ================== 관리자 - 타임캡슐 ================== */
+async function renderAdminCapsules(){
+  if(!currentSession){ $('#adminCapsuleList').innerHTML='<div class="empty">진행 중인 회차가 없어요.</div>'; return; }
+  const { data: users } = await sb.from('users').select('id,nickname').eq('current_session_id', currentSession.id).eq('is_admin',false);
+  const { data: caps } = await sb.from('time_capsules').select('*').eq('session_id', currentSession.id);
+  const capMap={};
+  (caps||[]).forEach(c=>{ capMap[c.user_id]=c; });
+  const list=users||[];
+  $('#adminCapsuleList').innerHTML = list.map(u=>{
+    const cap=capMap[u.id];
+    return `<div class="card" style="margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${cap?'10':'0'}px">
+        <span style="font-weight:700">${escapeHtml(u.nickname)}</span>
+        <span style="font-size:13px;color:${cap?'var(--sage-deep)':'var(--ink-soft)'}">${cap?'💌 작성완료':'미작성'}</span>
+      </div>
+      ${cap?`<div style="font-size:13px;line-height:1.7;color:var(--ink);background:var(--paper-2);border-radius:12px;padding:12px;white-space:pre-wrap">${escapeHtml(cap.content)}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+/* ================== 관리자 - 완주 리포트 ================== */
+async function renderAdminCompletion(){
+  if(!currentSession){ return; }
+  const { data: allRecs } = await sb.from('daily_records').select('*').eq('session_id', currentSession.id);
+  const { data: users } = await sb.from('users').select('id,nickname,plant_theme').eq('current_session_id', currentSession.id).eq('is_admin',false);
+  // 21일 완주한 유저만
+  const recsByUser={};
+  (allRecs||[]).forEach(r=>{ if(!recsByUser[r.user_id]) recsByUser[r.user_id]=[]; recsByUser[r.user_id].push(r); });
+  const completedUsers=(users||[]).filter(u=>{
+    const recs=recsByUser[u.id]||[];
+    return recs.filter(r=>r.status==='success'||r.status==='passed').length>=21;
+  });
+  const sel=$('#completionUserSelect');
+  sel.innerHTML='<option value="">완주 회원을 선택하세요</option>';
+  completedUsers.forEach(u=>{ sel.innerHTML+=`<option value="${u.id}">${escapeHtml(u.nickname)}</option>`; });
+
+  sel.onchange = async ()=>{
+    const uid=sel.value; if(!uid) return;
+    const u=completedUsers.find(x=>x.id===uid);
+    const recs=recsByUser[uid]||[];
+    const { data: cap } = await sb.from('time_capsules').select('*').eq('user_id',uid).eq('session_id',currentSession.id).single().catch(()=>({data:null}));
+    const canvas=$('#adminCompletionCanvas');
+    canvas.style.display='block';
+    await drawCompletionCanvas(canvas, recs, u, currentSession, cap, u.plant_theme||'default');
+    if(cap){ $('#adminCapsulePreview').style.display='block'; $('#adminCapsulePreviewText').textContent=cap.content; }
+    else { $('#adminCapsulePreview').style.display='none'; }
+  };
+}

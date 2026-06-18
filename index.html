@@ -585,6 +585,8 @@
       <button data-panel="adminAnnouncements">공지</button>
       <button data-panel="adminUserRecords">회원 기록</button>
       <button data-panel="adminPlants">식물 미리보기</button>
+      <button data-panel="adminCapsules">타임캡슐</button>
+      <button data-panel="adminCompletion">완주 리포트</button>
     </div>
 
     <!-- session -->
@@ -646,6 +648,31 @@
     <!-- plant preview -->
     <div class="admin-panel" id="adminPlants">
       <div id="plantPreviewGrid" style="padding:0 18px"></div>
+    </div>
+
+    <!-- capsules -->
+    <div class="admin-panel" id="adminCapsules">
+      <div class="card" style="margin-bottom:10px">
+        <h2>타임캡슐 현황</h2>
+        <p class="sub" style="margin-bottom:0">회원들이 작성한 타임캡슐 편지를 확인할 수 있어요.</p>
+      </div>
+      <div id="adminCapsuleList"></div>
+    </div>
+
+    <!-- completion report -->
+    <div class="admin-panel" id="adminCompletion">
+      <div style="margin:0 18px 12px">
+        <select id="completionUserSelect" style="width:100%;border:1.5px solid var(--line);border-radius:14px;padding:12px;font-family:'Noto Sans KR';font-size:14px;background:#fff;color:var(--ink)">
+          <option value="">완주 회원을 선택하세요</option>
+        </select>
+      </div>
+      <div style="margin:18px">
+        <canvas id="adminCompletionCanvas" style="width:100%;border-radius:16px;display:none"></canvas>
+        <div id="adminCapsulePreview" style="display:none;background:var(--paper-2);border-radius:16px;padding:16px;margin-top:12px">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:6px">💌 타임캡슐 편지</div>
+          <div id="adminCapsulePreviewText" style="font-size:14px;line-height:1.7;font-family:'Gowun Batang',serif;white-space:pre-wrap"></div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -729,6 +756,33 @@
       <div class="streak-badge">연속 기록이 유지돼요</div>
       <div class="celebrate-msg">오늘 하루는 쉬어가도 괜찮아요.<br>하지만 <b>내일은 꼭 함께해요!</b> 💪<br>작은 쉼 뒤에 더 단단해진 내가 기다리고 있어요.</div>
       <button class="primary" id="passCloseBtn">고마워요, 내일 또 올게요!</button>
+    </div>
+  </div>
+
+  <!-- 타임캡슐 팝업 -->
+  <div class="overlay center" id="capsuleOverlay">
+    <div class="sheet" style="max-width:420px;margin:20px">
+      <div style="text-align:center;font-size:44px;margin-bottom:8px">💌</div>
+      <h2 style="text-align:center;margin-bottom:6px">타임캡슐 편지</h2>
+      <p style="text-align:center;color:var(--ink-soft);font-size:13px;margin-bottom:18px">21일 후의 나에게 전하는 편지예요.<br>완주하는 날, 봉인이 열립니다.</p>
+      <textarea id="capsuleText" rows="7" placeholder="지금의 나에게, 21일 뒤의 나에게..." style="width:100%;box-sizing:border-box;border:1.5px solid var(--line);border-radius:16px;padding:14px;font-family:'Noto Sans KR';font-size:14px;line-height:1.7;resize:none;background:var(--paper-2);color:var(--ink)"></textarea>
+      <button class="primary" id="capsuleSendBtn" style="margin-top:14px">💌 타임캡슐 봉인하기</button>
+      <button class="ghost" id="capsuleLaterBtn" style="margin-top:10px;font-size:13px">나중에 쓸게요</button>
+    </div>
+  </div>
+
+  <!-- 완주 리포트 팝업 -->
+  <div class="overlay center" id="completionOverlay" style="overflow-y:auto">
+    <div class="sheet" style="max-width:420px;margin:20px;padding:0;overflow:hidden;border-radius:24px">
+      <canvas id="completionCanvas" style="width:100%;display:block"></canvas>
+      <div style="padding:18px">
+        <div id="completionCapsuleSection" style="display:none;background:var(--paper-2);border-radius:16px;padding:16px;margin-bottom:14px">
+          <div style="font-size:12px;color:var(--ink-soft);margin-bottom:8px">💌 21일 전 내가 나에게</div>
+          <div id="completionCapsuleText" style="font-size:14px;line-height:1.8;font-family:'Gowun Batang',serif;white-space:pre-wrap"></div>
+        </div>
+        <button class="primary" id="completionShareBtn">📸 이미지로 저장하기</button>
+        <button class="ghost" id="completionCloseBtn" style="margin-top:10px">닫기</button>
+      </div>
     </div>
   </div>
 
