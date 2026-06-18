@@ -169,9 +169,10 @@
   .post-top .name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;}
   .post-top .meta{font-size:12px;color:var(--ink-soft);}
   .post-top .mood{margin-left:auto;font-size:22px;}
-  .post-imgs{display:grid;grid-auto-flow:column;grid-auto-columns:90%;gap:4px;overflow-x:auto;scroll-snap-type:x mandatory;}
-  .post-imgs img{width:100%;aspect-ratio:4/3;object-fit:cover;background:var(--paper-2);display:block;scroll-snap-align:start;border-radius:0;}
-  .post-img.placeholder{display:flex;align-items:center;justify-content:center;color:var(--ink-soft);font-family:'Nanum Pen Script';font-size:30px;background:repeating-linear-gradient(180deg,#fbf7f0,#fbf7f0 27px,#e9e0d0 28px);aspect-ratio:4/3;}
+  .post-imgs{display:grid;grid-auto-flow:column;grid-auto-columns:100%;gap:0;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;}
+  .post-imgs::-webkit-scrollbar{display:none;}
+  .post-imgs img{width:100%;aspect-ratio:1/1;object-fit:cover;background:var(--paper-2);display:block;scroll-snap-align:start;border-radius:0;}
+  .post-img.placeholder{display:flex;align-items:center;justify-content:center;color:var(--ink-soft);font-family:'Nanum Pen Script';font-size:30px;background:repeating-linear-gradient(180deg,#fbf7f0,#fbf7f0 27px,#e9e0d0 28px);aspect-ratio:1/1;}
   .post-body{padding:12px 16px 16px;}
   .post-note{font-size:14px;margin-bottom:10px;white-space:pre-wrap;}
   .post-actions{display:flex;gap:18px;align-items:center;}
