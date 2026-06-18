@@ -137,6 +137,7 @@
     transition:background .2s;
   }
   .pwa-btn:hover{background:rgba(255,255,255,.25);}
+  .pwa-btn.active{background:rgba(255,255,255,.38);border-color:rgba(255,255,255,.85);font-weight:700;}
 
   .card{background:var(--paper);margin:18px;border-radius:22px;padding:22px;box-shadow:var(--shadow);}
   .card h2{font-family:'Gowun Batang',serif;font-size:19px;margin-bottom:4px;}
@@ -388,7 +389,10 @@
       </div>
       <div class="daychip" id="dayChip">🌱 1일차 · 오늘도 시작해요</div>
       <div class="wake-info" id="wakeInfo" style="display:none"></div>
-      <button class="pwa-btn" id="pwaBtn">📲 앱으로 설치하기</button>
+      <div id="homeBgThemeRow" style="display:flex;gap:8px;margin-top:14px;justify-content:center">
+        <button class="pwa-btn" data-bg="dawn">🌅 고요한 새벽</button>
+        <button class="pwa-btn" data-bg="morning">☀️ 맑은 아침</button>
+      </div>
     </div>
 
     <div class="card" id="wakeCard">
@@ -452,6 +456,9 @@
       </div>
       <div id="calendarGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px"></div>
     </div>
+    <div style="text-align:center;padding:4px 0 10px">
+      <button class="pwa-btn" id="pwaBtn">📲 앱으로 설치하기</button>
+    </div>
   </section>
 
   <!-- ============ FEED ============ -->
@@ -503,11 +510,6 @@
         <button class="theme-btn" data-plant="cactus">🌵 선인장</button>
         <button class="theme-btn" data-plant="bamboo">🎋 대나무</button>
         <button class="theme-btn" data-plant="cherry">🌸 벚꽃</button>
-      </div>
-      <div style="font-size:13px;font-weight:700;margin:14px 0 10px">🌅 배경 스킨</div>
-      <div class="theme-row" id="bgThemeRow">
-        <button class="theme-btn" data-bg="dawn">🌅 고요한 새벽</button>
-        <button class="theme-btn" data-bg="morning">☀️ 맑은 아침</button>
       </div>
     </div>
 

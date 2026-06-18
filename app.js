@@ -1793,12 +1793,12 @@ function setupThemeSelectors(){
       renderGarden();
     };
   });
-  $$('#bgThemeRow .theme-btn').forEach(b => {
+  $$('#homeBgThemeRow .pwa-btn[data-bg]').forEach(b => {
     if(b.dataset.bg === currentBgTheme) b.classList.add('active');
     else b.classList.remove('active');
     b.onclick = async () => {
       currentBgTheme = b.dataset.bg;
-      $$('#bgThemeRow .theme-btn').forEach(x => x.classList.remove('active'));
+      $$('#homeBgThemeRow .pwa-btn[data-bg]').forEach(x => x.classList.remove('active'));
       b.classList.add('active');
       applyBgTheme(currentBgTheme);
       await sb.from('users').update({ bg_theme: currentBgTheme }).eq('id', currentUser.id);
