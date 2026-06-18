@@ -1672,8 +1672,8 @@ $('#passCloseBtn').onclick = () => $('#passOverlay').classList.remove('show');
 
 /* ================== 배경 스킨 ================== */
 const BG_THEMES = {
-  dawn:   'linear-gradient(180deg,#1b1f3b 0%,#3d3a6b 38%,#e98a7d 74%,#f6b083 100%)',
-  winter: 'linear-gradient(180deg,#0d1b2a 0%,#1e3a5f 38%,#a8c4dc 74%,#dce8f0 100%)',
+  dawn:    'linear-gradient(180deg,#1b1f3b 0%,#3d3a6b 38%,#e98a7d 74%,#f6b083 100%)',
+  morning: 'linear-gradient(180deg,#5bb8e8 0%,#9fd5f5 28%,#ffe580 60%,#ffd633 100%)',
 };
 function applyBgTheme(theme){
   const sky = $('#sky');
