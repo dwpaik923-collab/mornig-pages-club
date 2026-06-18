@@ -2455,7 +2455,7 @@ function _roundRect(ctx, x, y, w, h, r){
 }
 
 async function drawCompletionCanvas(canvas, records, user, session, capsule, plantTheme){
-  const W=540, H=800;
+  const W=540, H=720;
   canvas.width=W; canvas.height=H;
   const ctx=canvas.getContext('2d');
 
@@ -2465,31 +2465,29 @@ async function drawCompletionCanvas(canvas, records, user, session, capsule, pla
   grad.addColorStop(0.72,'#e98a7d'); grad.addColorStop(1,'#f6b083');
   ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
 
-  // 별
-  ctx.fillStyle='rgba(255,255,255,0.55)';
-  for(let i=0;i<28;i++){
-    ctx.beginPath();
-    ctx.arc((Math.sin(i*137.5)*0.5+0.5)*W,(Math.cos(i*97.3)*0.4+0.15)*H,Math.random()*2+0.5,0,Math.PI*2);
-    ctx.fill();
-  }
+  // 별 (고정 위치)
+  const stars=[[0.18,0.06],[0.55,0.04],[0.78,0.09],[0.38,0.03],[0.88,0.07],[0.08,0.14],[0.62,0.12],[0.92,0.18],[0.28,0.16],[0.48,0.08]];
+  ctx.fillStyle='rgba(255,255,255,0.6)';
+  stars.forEach(([sx,sy])=>{ ctx.beginPath(); ctx.arc(sx*W,sy*H,1.5,0,Math.PI*2); ctx.fill(); });
 
-  // 헤더
+  // 헤더 - 크게
   ctx.textAlign='center';
-  ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.font='bold 17px sans-serif';
-  ctx.fillText('GOOD MORNING PAGE CLUB', W/2, 52);
-  ctx.fillStyle='#ffce7a'; ctx.font='bold 38px serif';
-  ctx.fillText('21일 완주 🏆', W/2, 97);
-  ctx.fillStyle='#fff'; ctx.font='bold 24px sans-serif';
-  ctx.fillText(user.nickname, W/2, 132);
+  ctx.fillStyle='rgba(255,255,255,0.75)'; ctx.font='500 20px sans-serif';
+  ctx.fillText('GOOD MORNING PAGE CLUB', W/2, 58);
+  ctx.fillStyle='#ffce7a'; ctx.font='bold 52px serif';
+  ctx.fillText('21일 완주 🏆', W/2, 120);
+  ctx.fillStyle='#fff'; ctx.font='bold 30px sans-serif';
+  ctx.fillText(user.nickname, W/2, 162);
 
-  // 식물
+  // 식물 SVG
   const svgStr=plantSVG(20,0,plantTheme||'default');
-  const svgBlob=new Blob([svgStr],{type:'image/svg+xml'});
+  const svgBlob=new Blob([svgStr],{type:'image/svg+xml;charset=utf-8'});
   const svgUrl=URL.createObjectURL(svgBlob);
   await new Promise(res=>{
     const img=new Image();
-    img.onload=()=>{ ctx.drawImage(img,W/2-105,145,210,231); URL.revokeObjectURL(svgUrl); res(); };
-    img.onerror=res; img.src=svgUrl;
+    img.onload=()=>{ ctx.drawImage(img,W/2-120,172,240,264); URL.revokeObjectURL(svgUrl); res(); };
+    img.onerror=()=>{ URL.revokeObjectURL(svgUrl); res(); };
+    img.src=svgUrl;
   });
 
   // 통계 계산
@@ -2501,8 +2499,7 @@ async function drawCompletionCanvas(canvas, records, user, session, capsule, pla
     const a=total/successRecs.length, h=Math.floor(a/60), m=Math.round(a%60);
     avgWakeStr=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
   }
-  let fastestStr='-';
-  let fastestMins=Infinity;
+  let fastestStr='-', fastestMins=Infinity;
   successRecs.forEach(r=>{ const d=parseUTC(r.woke_at); const m=d.getHours()*60+d.getMinutes(); if(m<fastestMins){fastestMins=m; fastestStr=kstTimeStr(r.woke_at);} });
   let maxStreak=0,cur=0;
   for(let d=1;d<=21;d++){
@@ -2512,54 +2509,28 @@ async function drawCompletionCanvas(canvas, records, user, session, capsule, pla
   }
 
   // 통계 박스
-  ctx.fillStyle='rgba(255,255,255,0.11)';
-  _roundRect(ctx,36,392,W-72,108,14); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.12)';
+  _roundRect(ctx,36,450,W-72,100,16); ctx.fill();
   const stats=[['인증 일수',completedCount+'일'],['평균 기상',avgWakeStr],['최고 연속',maxStreak+'일'],['최단 기상',fastestStr]];
   const cellW=(W-72)/4;
   stats.forEach(([label,val],i)=>{
     const cx=36+cellW*i+cellW/2;
-    ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.font='12px sans-serif'; ctx.textAlign='center';
-    ctx.fillText(label,cx,420);
-    ctx.fillStyle='#fff'; ctx.font='bold 20px sans-serif';
-    ctx.fillText(val,cx,448);
+    ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.font='13px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(label,cx,478);
+    ctx.fillStyle='#fff'; ctx.font='bold 22px sans-serif';
+    ctx.fillText(val,cx,508);
   });
 
-  // 감정 도넛
-  const moodColors={'🌞':'#ffce7a','🙂':'#8ba888','😐':'#a0a0c0','😮‍💨':'#e9b97d','🌧️':'#e98a7d'};
-  const moodCounts={};
-  records.forEach(r=>{ if(r.mood) moodCounts[r.mood]=(moodCounts[r.mood]||0)+1; });
-  const moodEntries=Object.entries(moodCounts).sort((a,b)=>b[1]-a[1]);
-  const moodTotal=moodEntries.reduce((s,[,c])=>s+c,0);
-  if(moodTotal>0){
-    const cx=W/2, cy=590, r=58;
-    let ang=-Math.PI/2;
-    moodEntries.forEach(([mood,count])=>{
-      const a=(count/moodTotal)*Math.PI*2;
-      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,ang,ang+a); ctx.closePath();
-      ctx.fillStyle=moodColors[mood]||'#ccc'; ctx.fill(); ang+=a;
-    });
-    // 도넛 구멍
-    ctx.beginPath(); ctx.arc(cx,cy,r*0.54,0,Math.PI*2);
-    const hg=ctx.createRadialGradient(cx,cy,0,cx,cy,r*0.54);
-    hg.addColorStop(0,'rgba(75,65,115,0.95)'); hg.addColorStop(1,'rgba(75,65,115,0.95)');
-    ctx.fillStyle=hg; ctx.fill();
-    ctx.fillStyle='#fff'; ctx.font='bold 14px sans-serif'; ctx.textAlign='center';
-    ctx.fillText('감정', cx, cy-4); ctx.font='12px sans-serif';
-    ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.fillText('분포', cx, cy+14);
-    // 범례
-    const legW=moodEntries.length*52, legStartX=W/2-legW/2+10;
-    moodEntries.forEach(([mood],i)=>{
-      const lx=legStartX+i*52;
-      ctx.fillStyle=moodColors[mood]||'#ccc';
-      ctx.beginPath(); ctx.arc(lx,672,5,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle='#fff'; ctx.font='15px sans-serif'; ctx.textAlign='center';
-      ctx.fillText(mood,lx,695);
-    });
-  }
+  // 축하 메시지
+  ctx.fillStyle='rgba(255,255,255,0.1)';
+  _roundRect(ctx,36,566,W-72,96,14); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.88)'; ctx.font='italic 18px serif'; ctx.textAlign='center';
+  ctx.fillText('매일 아침 세 장을 채운 당신,', W/2, 600);
+  ctx.fillText('그 작은 용기가 쌓여 오늘의 나무가 됐어요.', W/2, 630);
 
   // 워터마크
-  ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.font='13px sans-serif';
-  ctx.fillText('goodmorningpageclub', W/2, 768);
+  ctx.textAlign='center'; ctx.fillStyle='rgba(255,255,255,0.3)'; ctx.font='13px sans-serif';
+  ctx.fillText('goodmorningpageclub', W/2, 700);
 
   return ctx;
 }
