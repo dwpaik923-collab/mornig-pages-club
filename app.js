@@ -8,6 +8,21 @@ const GOLDEN_SECONDS = 90 * 60; // 90분
 const TOTAL_DAYS = 21;
 const PLANT_STAGE_COUNT = 21; // 21단계 식물 성장
 
+/* 관리자 상시 접속 보장용 아이디 목록 (소문자로 적어주세요)
+   여기에 적힌 아이디는 DB의 is_admin 값이 잘못되어 있어도 항상 관리자로 로그인되고,
+   로그인 시 DB의 is_admin 값을 true로 자동 복구합니다. */
+const ADMIN_USERNAMES = ['admin', 'administrator', 'master', 'gmpc_admin'];
+
+/* is_admin 값이 true / 'true' / 1 / 't' 등 어떤 형태로 저장돼 있어도 관리자로 인식 */
+function isAdmin(u){
+  if(!u) return false;
+  const v = u.is_admin;
+  if(v === true || v === 1) return true;
+  if(typeof v === 'string' && ['true','t','1','y','yes'].includes(v.toLowerCase())) return true;
+  if(u.username && ADMIN_USERNAMES.includes(String(u.username).toLowerCase())) return true;
+  return false;
+}
+
 const MOOD_EMOJI = ['🌞','🙂','😐','😮‍💨','🌧️'];
 const COLORS = ["#e98a7d","#f6b083","#8ba888","#5c7a5a","#3d3a6b","#c97b84","#7e9bb5","#d9a05b"];
 
@@ -82,7 +97,7 @@ $$('.nav button').forEach(b=>{
   b.onclick = async ()=>{
     setActiveNav(b.dataset.screen);
     showScreen(b.dataset.screen);
-    if(b.dataset.screen==='home' && currentUser && !currentUser.is_admin){
+    if(b.dataset.screen==='home' && currentUser && !isAdmin(currentUser)){
       await loadAnnouncement();
       checkCapsulePopup();
     }
@@ -133,8 +148,29 @@ $('#loginBtn').onclick = async ()=>{
     }
     if(!data){ showAuthError('login','아이디 또는 비밀번호가 올바르지 않아요.'); return; }
 
-    // 관리자가 아닐 경우 현재 활성 회차에 속해있는지 + 기간 체크
-    if(!data.is_admin){
+    // ===== 관리자는 회차/기간과 무관하게 항상 로그인 가능 =====
+    if(isAdmin(data)){
+      // DB의 is_admin 플래그가 빠져 있으면 자동 복구
+      if(data.is_admin !== true){
+        try{
+          await sb.from('users').update({ is_admin: true }).eq('id', data.id);
+          data.is_admin = true;
+        }catch(_){ data.is_admin = true; }
+      }
+      currentUser = data;
+      store.set('mpc_user_id', data.id);
+      try{
+        await afterLogin();
+      }catch(e){
+        // 화면 렌더링에서 오류가 나도 관리자 로그인 자체는 막지 않음
+        console.error('afterLogin(admin):', e);
+        toast('일부 화면을 불러오지 못했어요. 관리자 메뉴는 사용 가능해요.');
+      }
+      return;
+    }
+
+    // 일반 회원: 현재 활성 회차에 속해있는지 + 기간 체크
+    {
       const session = await getActiveSession();
       if(!session){ showAuthError('login','현재 진행 중인 회차가 없어요. 운영자에게 문의해주세요.'); return; }
       if(!data.current_session_id || data.current_session_id !== session.id){
@@ -258,30 +294,32 @@ async function afterLogin(){
   setActiveNav('home');
   $('#mainNav').style.display='flex';
 
-  if(currentUser.is_admin){
-    $('#adminNavBtn').style.display='flex';
-    $('#pushDebugBtn').style.display='block';
-    $('#wakeCard').style.display='none';
-    $('#timerWrap').classList.remove('show');
+  const show = (sel, val)=>{ const el=$(sel); if(el) el.style.display = val; };
+  if(isAdmin(currentUser)){
+    show('#adminNavBtn','flex');
+    show('#pushDebugBtn','block');
+    show('#wakeCard','none');
+    const tw = $('#timerWrap'); if(tw) tw.classList.remove('show');
   }else{
-    $('#adminNavBtn').style.display='none';
-    $('#pushDebugBtn').style.display='none';
+    show('#adminNavBtn','none');
+    show('#pushDebugBtn','none');
   }
 
-  currentSession = await getActiveSession();
+  try{ currentSession = await getActiveSession(); }catch(e){ console.error('getActiveSession:', e); currentSession = null; }
 
   // 테마 로드
   currentPlantTheme = currentUser.plant_theme || 'default';
   currentBgTheme = currentUser.bg_theme || 'dawn';
   applyBgTheme(currentBgTheme);
 
-  await loadMyData();
-  setQuote();
-  makeStars();
-  updateDayChip();
-  await setupWakeUI();
+  const step = async (label, fn)=>{ try{ await fn(); }catch(e){ console.error(label+':', e); } };
+  await step('loadMyData', loadMyData);
+  await step('setQuote', setQuote);
+  await step('makeStars', makeStars);
+  await step('updateDayChip', updateDayChip);
+  await step('setupWakeUI', setupWakeUI);
 
-  if(!currentUser.is_admin){
+  if(!isAdmin(currentUser)){
     if($('#calendarSection')) $('#calendarSection').style.display='block';
     renderCalendar();
     await loadAnnouncement();
@@ -289,11 +327,11 @@ async function afterLogin(){
     if($('#calendarSection')) $('#calendarSection').style.display='none';
   }
   // 자동 푸시 구독 비활성화 (알림 진단에서 수동으로만 구독)
-  if(!currentUser.is_admin){ await loadCapsule(); checkCapsulePopup(); }
+  if(!isAdmin(currentUser)){ await loadCapsule(); checkCapsulePopup(); }
 }
 
 async function loadMyData(){
-  if(!currentSession || currentUser.is_admin) { myRecords=[]; myPosts=[]; return; }
+  if(!currentSession || isAdmin(currentUser)) { myRecords=[]; myPosts=[]; return; }
   const { data: records } = await sb.from('daily_records').select('*').eq('user_id', currentUser.id).eq('session_id', currentSession.id).order('day');
   myRecords = records || [];
   const { data: posts } = await sb.from('posts').select('*').eq('user_id', currentUser.id).eq('session_id', currentSession.id).order('day',{ascending:false});
@@ -385,7 +423,7 @@ async function getTodayRecord(){
 }
 
 async function setupWakeUI(){
-  if(currentUser.is_admin) return;
+  if(isAdmin(currentUser)) return;
   if(timerInterval) clearInterval(timerInterval);
 
   const record = await getTodayRecord();
@@ -473,7 +511,7 @@ async function setupWakeUI(){
 }
 
 $('#wakeBtn').onclick = async ()=>{
-  if(currentUser.is_admin) return;
+  if(isAdmin(currentUser)) return;
   const existing = await getTodayRecord();
   // 이미 성공/실패 기록이 있으면 무시, pending이면 타이머만 재시작
   if(existing && (existing.status==='success' || existing.status==='failed')) return;
@@ -754,7 +792,7 @@ async function renderFeed(){
 
   if(error){ console.error(error); $('#postList').innerHTML = `<div class="empty">피드를 불러오지 못했어요.</div>`; return; }
 
-  const visible = (posts||[]).filter(p=> !p.is_private || p.user_id===currentUser.id || currentUser.is_admin);
+  const visible = (posts||[]).filter(p=> !p.is_private || p.user_id===currentUser.id || isAdmin(currentUser));
 
   if(!visible.length){
     $('#postList').innerHTML = `<div class="empty">아직 올라온 페이지가 없어요.<br>가장 먼저 오늘의 페이지를 공유해보세요 ✍️</div>`;
@@ -913,7 +951,7 @@ function renderCommentList(){
   $('#commentList').innerHTML = list.map(c=>{
     const name = c.users?.nickname || '익명';
     const color = COLORS[hashCode(name)%COLORS.length];
-    const canDelete = c.user_id===currentUser.id || currentUser.is_admin;
+    const canDelete = c.user_id===currentUser.id || isAdmin(currentUser);
     return `<div class="comment-row">
       <div class="comment-avatar" style="background:${color}">${name[0]}</div>
       <div class="comment-body">
@@ -1328,15 +1366,18 @@ $$('.admin-tabs button').forEach(b=>{
 });
 
 async function renderAdmin(){
-  await renderAdminSession();
-  await renderAdminUsers();
-  await renderAdminQuotes();
-  await renderAdminPosts();
-  await renderAdminAnnouncements();
-  await renderAdminUserRecords();
-  await renderAdminPlants();
-  await renderAdminCapsules();
-  await renderAdminCompletion();
+  // 활성 회차가 없어도 관리자 화면은 항상 열려야 하므로, 각 섹션을 개별 보호
+  if(!currentSession){
+    try{ currentSession = await getActiveSession(); }catch(_){}
+  }
+  const sections = [
+    ['회차', renderAdminSession], ['회원', renderAdminUsers], ['명언', renderAdminQuotes],
+    ['게시물', renderAdminPosts], ['공지', renderAdminAnnouncements], ['회원기록', renderAdminUserRecords],
+    ['식물', renderAdminPlants], ['타임캡슐', renderAdminCapsules], ['완주', renderAdminCompletion]
+  ];
+  for(const [label, fn] of sections){
+    try{ await fn(); }catch(e){ console.error('renderAdmin['+label+']:', e); }
+  }
 }
 
 async function renderAdminSession(){
@@ -1586,7 +1627,7 @@ async function renderAdminPosts(){
 // 기록이 없거나 pending 상태인 날은 failed로 처리하고, 연속 실패 일수에 따라 시들기 정도를 올린다.
 // 성공한 날을 만나면 연속 실패 카운트를 초기화한다.
 async function checkFailures(){
-  if(!currentUser || currentUser.is_admin || !currentSession) return;
+  if(!currentUser || isAdmin(currentUser) || !currentSession) return;
   const day = getCurrentDay();
   const recordedDays = new Map(myRecords.map(r=>[r.day, r]));
   let consecutiveMiss = 0;
@@ -1621,7 +1662,7 @@ async function checkFailures(){
 
 /* ================== 홈 카드 렌더링 ================== */
 async function renderHomeCards(){
-  if(currentUser.is_admin) return;
+  if(isAdmin(currentUser)) return;
 
   // A) 미니 정원 카드
   const completedCount = myRecords.filter(r=>r.status==='success'||r.status==='passed').length;
@@ -1933,7 +1974,7 @@ function renderMoodChart(){
 
 /* ================== 21일 달력 ================== */
 function renderCalendar(){
-  if(!currentUser || currentUser.is_admin) return;
+  if(!currentUser || isAdmin(currentUser)) return;
   const calGrid = $('#calendarGrid');
   const calCount = $('#calendarCount');
   if(!calGrid) return;
@@ -2074,7 +2115,7 @@ async function checkPerfectDay(users, successIds){
 /* ================== 골든타임 45분 알림 ================== */
 /* ================== 받은 응원 카드 ================== */
 async function renderReceivedCheers(){
-  if(!currentUser || currentUser.is_admin) return;
+  if(!currentUser || isAdmin(currentUser)) return;
   try{
     const lastCheck = store.get('mpc_cheer_check_' + currentUser.id) || '2000-01-01T00:00:00Z';
     const { data: cheers } = await sb.from('cheers')
@@ -2369,7 +2410,11 @@ async function init(){
     try{
       const { data, error } = await sb.from('users').select('*').eq('id', savedId).maybeSingle();
       if(!error && data){
-        if(!data.is_admin){
+        if(isAdmin(data)){
+          // 관리자는 회차 종료 여부와 무관하게 세션 유지
+          data.is_admin = true;
+          currentUser = data;
+        }else{
           const session = await getActiveSession();
           const today = todayKST();
           const validSession = session && data.current_session_id===session.id && today<=session.end_date;
@@ -2379,8 +2424,6 @@ async function init(){
           }else{
             currentUser = data;
           }
-        }else{
-          currentUser = data;
         }
       }
     }catch(e){ console.error(e); }
@@ -2390,13 +2433,14 @@ async function init(){
   $('#app').style.display='block';
 
   if(currentUser){
-    await afterLogin();
-    await checkFailures();
-    await loadMyData();
-    await setupWakeUI();
-    await renderGarden();
-    await renderHomeCards();
-    checkPwaPopup();
+    const safe = async (label, fn)=>{ try{ await fn(); }catch(e){ console.error(label+':', e); } };
+    await safe('afterLogin', afterLogin);
+    await safe('checkFailures', checkFailures);
+    await safe('loadMyData', loadMyData);
+    await safe('setupWakeUI', setupWakeUI);
+    await safe('renderGarden', renderGarden);
+    await safe('renderHomeCards', renderHomeCards);
+    await safe('checkPwaPopup', checkPwaPopup);
     // 푸시 구독은 afterLogin() 내부에서 처리됨
   }else{
     showScreen('authScreen');
@@ -2414,7 +2458,7 @@ init();
 let currentUserCapsule = null;
 
 async function loadCapsule(){
-  if(!currentUser || currentUser.is_admin || !currentSession) return;
+  if(!currentUser || isAdmin(currentUser) || !currentSession) return;
   try{
     const { data } = await sb.from('time_capsules')
       .select('*').eq('user_id', currentUser.id).eq('session_id', currentSession.id).single();
@@ -2423,7 +2467,7 @@ async function loadCapsule(){
 }
 
 function checkCapsulePopup(){
-  if(!currentUser || currentUser.is_admin) return;
+  if(!currentUser || isAdmin(currentUser)) return;
   if(currentUserCapsule) return;
   setTimeout(()=>{ $('#capsuleOverlay').classList.add('show'); }, 700);
 }
