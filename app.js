@@ -146,7 +146,22 @@ $('#loginBtn').onclick = async ()=>{
         data = loginRow;
       }
     }
-    if(!data){ showAuthError('login','아이디 또는 비밀번호가 올바르지 않아요.'); return; }
+    if(!data){
+      // 관리자 아이디는 원인을 구분해서 알려줌 (계정 없음 vs 비밀번호 불일치)
+      if(ADMIN_USERNAMES.includes(username.toLowerCase())){
+        if(!loginRow){
+          showAuthError('login','[진단] "'+username+'" 계정이 DB에 없어요. Supabase users 테이블을 확인해주세요.');
+        }else{
+          const h = await sha256(password);
+          console.log('[진단] 입력 비밀번호 SHA-256:', h);
+          console.log('[진단] DB 저장값 길이:', (loginRow.password||'').length);
+          showAuthError('login','[진단] 계정은 있지만 비밀번호가 달라요. 콘솔의 해시값으로 Supabase에서 갱신해주세요.');
+        }
+        return;
+      }
+      showAuthError('login','아이디 또는 비밀번호가 올바르지 않아요.');
+      return;
+    }
 
     // ===== 관리자는 회차/기간과 무관하게 항상 로그인 가능 =====
     if(isAdmin(data)){
@@ -282,10 +297,81 @@ async function getActiveSession(){
   return data || null;
 }
 
-// SHA-256 해싱 (Web Crypto API)
+// SHA-256 해싱 (Web Crypto API + 순수 JS 폴백)
+// crypto.subtle은 보안 컨텍스트(https/localhost)에서만 동작합니다.
+// 일부 모바일 인앱 브라우저/http 접속에서 undefined가 되어 로그인이 통째로 실패하던 문제 대응.
 async function sha256(text){
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  try{
+    if(typeof crypto !== 'undefined' && crypto.subtle && crypto.subtle.digest){
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+      return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }
+  }catch(e){ console.warn('crypto.subtle 사용 불가, JS 폴백 사용:', e); }
+  return sha256js(text);
+}
+
+// 순수 JS SHA-256 구현 (Web Crypto와 동일한 결과)
+function sha256js(ascii){
+  function rr(v,a){ return (v>>>a)|(v<<(32-a)); }
+  const mm=Math.pow(2,32);
+  const K=[];
+  const H=[];
+  let isPrime, primeCounter=0;
+  for(let cand=2; primeCounter<64; cand++){
+    isPrime=true;
+    for(let f=2; f*f<=cand; f++){ if(cand%f===0){ isPrime=false; break; } }
+    if(isPrime){
+      if(primeCounter<8) H[primeCounter]=(Math.pow(cand,1/2)%1)*mm|0;
+      K[primeCounter]=(Math.pow(cand,1/3)%1)*mm|0;
+      primeCounter++;
+    }
+  }
+  // UTF-8 인코딩 (한글/이모지 포함 안전)
+  let bytes=[];
+  if(typeof TextEncoder !== 'undefined'){
+    bytes = Array.from(new TextEncoder().encode(ascii));
+  }else{
+    for(let i=0;i<ascii.length;i++){
+      let cp = ascii.codePointAt(i);
+      if(cp > 0xFFFF) i++;
+      if(cp < 0x80) bytes.push(cp);
+      else if(cp < 0x800) bytes.push(0xC0|(cp>>6), 0x80|(cp&63));
+      else if(cp < 0x10000) bytes.push(0xE0|(cp>>12), 0x80|((cp>>6)&63), 0x80|(cp&63));
+      else bytes.push(0xF0|(cp>>18), 0x80|((cp>>12)&63), 0x80|((cp>>6)&63), 0x80|(cp&63));
+    }
+  }
+  const bitLen = bytes.length*8;
+  bytes.push(0x80);
+  while(bytes.length%64 !== 56) bytes.push(0);
+  const hi = Math.floor(bitLen/mm), lo = bitLen>>>0;
+  bytes.push((hi>>>24)&255,(hi>>>16)&255,(hi>>>8)&255,hi&255);
+  bytes.push((lo>>>24)&255,(lo>>>16)&255,(lo>>>8)&255,lo&255);
+
+  const h=H.slice(0);
+  const w=new Array(64);
+  for(let off=0; off<bytes.length; off+=64){
+    for(let i=0;i<16;i++){
+      w[i]=(bytes[off+i*4]<<24)|(bytes[off+i*4+1]<<16)|(bytes[off+i*4+2]<<8)|bytes[off+i*4+3];
+    }
+    for(let i=16;i<64;i++){
+      const s0 = rr(w[i-15],7)^rr(w[i-15],18)^(w[i-15]>>>3);
+      const s1 = rr(w[i-2],17)^rr(w[i-2],19)^(w[i-2]>>>10);
+      w[i]=(w[i-16]+s0+w[i-7]+s1)|0;
+    }
+    let [a,b,c,d,e,f,g,hh]=h;
+    for(let i=0;i<64;i++){
+      const S1 = rr(e,6)^rr(e,11)^rr(e,25);
+      const ch = (e&f)^((~e)&g);
+      const t1 = (hh+S1+ch+K[i]+w[i])|0;
+      const S0 = rr(a,2)^rr(a,13)^rr(a,22);
+      const maj = (a&b)^(a&c)^(b&c);
+      const t2 = (S0+maj)|0;
+      hh=g; g=f; f=e; e=(d+t1)|0; d=c; c=b; b=a; a=(t1+t2)|0;
+    }
+    h[0]=(h[0]+a)|0; h[1]=(h[1]+b)|0; h[2]=(h[2]+c)|0; h[3]=(h[3]+d)|0;
+    h[4]=(h[4]+e)|0; h[5]=(h[5]+f)|0; h[6]=(h[6]+g)|0; h[7]=(h[7]+hh)|0;
+  }
+  return h.map(x=>((x>>>0).toString(16).padStart(8,'0'))).join('');
 }
 
 /* ================== 로그인 후 초기화 ================== */
