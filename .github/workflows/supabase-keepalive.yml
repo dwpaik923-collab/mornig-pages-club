@@ -1,0 +1,48 @@
+name: Supabase Keepalive
+
+# Supabase 무료 플랜은 약 7일간 DB 요청이 없으면 프로젝트를 자동 일시정지합니다.
+# 일시정지되면 로그인을 포함한 모든 기능이 멈추므로, 이틀에 한 번 실제 쿼리를 보내
+# "사용 중" 상태를 유지합니다.
+
+on:
+  schedule:
+    # 매 2일 00:17 UTC (KST 09:17). 정각은 러너 혼잡으로 지연되므로 피함.
+    - cron: '17 0 */2 * *'
+  workflow_dispatch:        # Actions 탭에서 수동 실행 가능
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping Supabase REST API
+        env:
+          # 이 키는 클라이언트 공개용(publishable/anon) 키로, app.js에도 이미 노출되어 있습니다.
+          # service_role 키는 절대 여기에 넣지 마세요.
+          SUPABASE_URL: https://lztzqqijllczwoojubsf.supabase.co
+          SUPABASE_KEY: sb_publishable_4LWywzGz5JnXFmoNG3N8tw_IZbow1SP
+        run: |
+          set -euo pipefail
+
+          # 실제 테이블을 읽어야 Postgres가 깨어난 것으로 집계됩니다.
+          # (헬스체크 엔드포인트만 때리면 DB는 잠든 채로 남을 수 있음)
+          for table in sessions quotes users; do
+            echo "--- querying ${table} ---"
+            code=$(curl -sS -o /tmp/body.txt -w '%{http_code}' \
+              --max-time 30 --retry 3 --retry-delay 10 --retry-all-errors \
+              "${SUPABASE_URL}/rest/v1/${table}?select=id&limit=1" \
+              -H "apikey: ${SUPABASE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_KEY}")
+
+            echo "HTTP ${code}"
+            head -c 300 /tmp/body.txt; echo
+
+            if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+              echo "✅ Supabase 응답 정상 (${table})"
+              exit 0
+            fi
+          done
+
+          echo "::error::Supabase가 응답하지 않습니다. 프로젝트가 일시정지되었을 수 있습니다."
+          echo "::error::https://supabase.com/dashboard/project/lztzqqijllczwoojubsf 에서 Restore 하세요."
+          exit 1
